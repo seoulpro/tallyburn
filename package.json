@@ -1,0 +1,65 @@
+{
+  "name": "tallyburn",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.34.5",
+  "description": "Local-first AI token usage monitor for Codex, Claude Code, Qwen Code, and local models",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "tallyburn": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build && node --test dist/test/*.test.js",
+    "start": "node dist/src/cli.js",
+    "macos:build": "./scripts/build-macos-dev.sh",
+    "prepack": "pnpm run test"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "keywords": [
+    "anthropic",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "github-copilot",
+    "llama-cpp",
+    "openai",
+    "qwen",
+    "qwen-code",
+    "vllm",
+    "terminal",
+    "token-usage",
+    "tui"
+  ],
+  "license": "Apache-2.0",
+  "author": "Sumin Lim <lim@limsumin.com> (https://limsumin.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seoulpro/tallyburn.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seoulpro/tallyburn/issues"
+  },
+  "homepage": "https://github.com/seoulpro/tallyburn",
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^7.0.2"
+  }
+}

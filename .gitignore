@@ -1,0 +1,13 @@
+dist/
+node_modules/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+build/
+DerivedData/
+apps/macos/Tallyburn.xcodeproj/
+xcuserdata/
+*.xcuserstate
