@@ -48,6 +48,7 @@ export async function startCodexAccountBridge(
       stdio: ["pipe", "pipe", "pipe"],
       env: launch.env,
       windowsHide: true,
+      windowsVerbatimArguments: launch.windowsScript,
     },
   );
   const connection = new JsonRpcConnection(

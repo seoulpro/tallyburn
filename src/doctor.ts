@@ -156,6 +156,7 @@ function commandStatus(command: string): Promise<DoctorClientStatus> {
         maxBuffer: 64 * 1024,
         env: launch.env,
         windowsHide: true,
+        windowsVerbatimArguments: launch.windowsScript,
       },
       (error, stdout, stderr) => {
         if (error) {

@@ -67,6 +67,7 @@ export async function readClaudeAccountContext(
         maxBuffer: maxOutputBytes,
         env: launch.env,
         windowsHide: true,
+        windowsVerbatimArguments: launch.windowsScript,
         ...(options.signal ? { signal: options.signal } : {}),
       },
       (error, stdout) => {
