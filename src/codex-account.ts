@@ -1,6 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import {
+  prepareCommandLaunch,
+  terminateCommandProcess,
+} from "./command-launch.js";
+import {
   asRecord,
   readNumber,
   readRecord,
@@ -33,18 +37,24 @@ export interface CodexAccountOptions {
 export async function startCodexAccountBridge(
   options: CodexAccountOptions,
 ): Promise<CodexAccountBridge> {
-  const child = spawn(
+  const launch = prepareCommandLaunch(
     options.executable ?? "codex",
     ["app-server", "--listen", "stdio://"],
+  );
+  const child = spawn(
+    launch.command,
+    launch.args,
     {
       stdio: ["pipe", "pipe", "pipe"],
-      env: process.env,
+      env: launch.env,
+      windowsHide: true,
     },
   );
   const connection = new JsonRpcConnection(
     child,
     options.timeoutMs ?? 4_000,
     options.signal,
+    launch.windowsScript,
   );
   connection.onNotification = (method, params) => {
     if (method === "account/rateLimits/updated") {
@@ -150,6 +160,7 @@ class JsonRpcConnection {
   readonly #child: ChildProcessWithoutNullStreams;
   readonly #timeoutMs: number;
   readonly #deadlineAt: number;
+  readonly #windowsScript: boolean;
   readonly #pending = new Map<number, PendingRequest>();
   #nextId = 1;
   #closed = false;
@@ -159,10 +170,12 @@ class JsonRpcConnection {
     child: ChildProcessWithoutNullStreams,
     timeoutMs: number,
     signal?: AbortSignal,
+    windowsScript = false,
   ) {
     this.#child = child;
     this.#timeoutMs = timeoutMs;
     this.#deadlineAt = Date.now() + timeoutMs;
+    this.#windowsScript = windowsScript;
     const lines = createInterface({ input: child.stdout });
     lines.on("line", (line) => this.#handleLine(line));
     child.on("error", () => this.#failPending("Codex app-server unavailable."));
@@ -225,9 +238,17 @@ class JsonRpcConnection {
     ) {
       return;
     }
-    this.#child.kill("SIGTERM");
+    await terminateCommandProcess(
+      this.#child,
+      this.#windowsScript,
+      "SIGTERM",
+    );
     if (!(await this.#waitForExit(1_000))) {
-      this.#child.kill("SIGKILL");
+      await terminateCommandProcess(
+        this.#child,
+        this.#windowsScript,
+        "SIGKILL",
+      );
       await this.#waitForExit(500);
     }
   }

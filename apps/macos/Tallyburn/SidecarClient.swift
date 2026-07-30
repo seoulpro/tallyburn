@@ -215,6 +215,26 @@ enum SidecarLaunchPolicy {
     return nil
   }
 
+  static func bundledExecutable(
+    bundleURL: URL,
+    auxiliaryExecutable: URL?,
+    appExecutable: URL?
+  ) -> URL? {
+    let helpersExecutable =
+      bundleURL
+      .appendingPathComponent("Contents", isDirectory: true)
+      .appendingPathComponent("Helpers", isDirectory: true)
+      .appendingPathComponent("tallyburn", isDirectory: false)
+    for candidate in [helpersExecutable, auxiliaryExecutable]
+      .compactMap({ $0 })
+    {
+      if isDistinctExecutable(candidate, from: appExecutable) {
+        return candidate
+      }
+    }
+    return nil
+  }
+
   static func arguments(
     for configuration: SidecarConfiguration,
     isolatedConfigURL: URL,
@@ -795,12 +815,13 @@ final class SidecarClient: SidecarControlling {
       return .executable(url)
     }
 
-    if let bundled = Bundle.main.url(forAuxiliaryExecutable: "tallyburn"),
-      SidecarLaunchPolicy.isDistinctExecutable(
-        bundled,
-        from: Bundle.main.executableURL
-      )
-    {
+    if let bundled = SidecarLaunchPolicy.bundledExecutable(
+      bundleURL: Bundle.main.bundleURL,
+      auxiliaryExecutable: Bundle.main.url(
+        forAuxiliaryExecutable: "tallyburn"
+      ),
+      appExecutable: Bundle.main.executableURL
+    ) {
       return .executable(bundled)
     }
     let home = FileManager.default.homeDirectoryForCurrentUser.path

@@ -2,9 +2,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+declare const __TALLYBURN_BUNDLED_VERSION__: string | undefined;
+
 export const VERSION = readPackageVersion();
 
 function readPackageVersion(): string {
+  if (
+    typeof __TALLYBURN_BUNDLED_VERSION__ === "string" &&
+    __TALLYBURN_BUNDLED_VERSION__.length > 0
+  ) {
+    return __TALLYBURN_BUNDLED_VERSION__;
+  }
   let directory = dirname(fileURLToPath(import.meta.url));
   for (let depth = 0; depth < 4; depth += 1) {
     try {

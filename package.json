@@ -1,6 +1,7 @@
 {
   "name": "tallyburn",
   "version": "0.1.0",
+  "private": true,
   "packageManager": "pnpm@10.34.5",
   "description": "Local-first AI token usage monitor for Codex, Claude Code, Qwen Code, and local models",
   "type": "module",
@@ -15,7 +16,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "tallyburn": "./dist/src/cli.js"
+    "tallyburn": "dist/src/cli.js"
   },
   "files": [
     "dist/src",
@@ -26,12 +27,20 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm run build && node --test dist/test/*.test.js",
+    "cli:stage": "node scripts/stage-npm-package.mjs",
+    "cli:pack": "pnpm run test && pnpm run cli:stage && npm pack ./build/npm/tallyburn --pack-destination ./build/npm",
+    "engine:macos": "pnpm run build && node scripts/build-macos-engine.mjs",
     "start": "node dist/src/cli.js",
     "macos:build": "./scripts/build-macos-dev.sh",
     "prepack": "pnpm run test"
   },
   "engines": {
     "node": ">=20.11"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "keywords": [
     "anthropic",
@@ -60,6 +69,8 @@
   "homepage": "https://github.com/seoulpro/tallyburn",
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "esbuild": "0.28.1",
+    "postject": "1.0.0-alpha.6",
     "typescript": "^7.0.2"
   }
 }

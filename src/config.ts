@@ -1,6 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import {
+  isAbsolute,
+  join,
+  posix,
+  resolve,
+  win32,
+  type PlatformPath,
+} from "node:path";
 import {
   parseDuration,
   parseWindows,
@@ -8,7 +15,12 @@ import {
 } from "./duration.js";
 import { PROVIDERS, type Provider } from "./model.js";
 
-export type Command = "watch" | "stream" | "doctor" | "statusline";
+export type Command =
+  | "watch"
+  | "snapshot"
+  | "stream"
+  | "doctor"
+  | "statusline";
 
 const VALUE_OPTIONS = new Set([
   "--windows",
@@ -93,13 +105,10 @@ export async function resolveConfig(
 ): Promise<AppConfig> {
   const command = detectCommand(argv);
   const taskHome = homedir();
-  const defaultConfigPath = join(
-    env.XDG_CONFIG_HOME ?? join(taskHome, ".config"),
-    "tallyburn",
-    "config.json",
-  );
   const configPath = resolve(
-    optionValue(argv, "--config") ?? env.TALLYBURN_CONFIG ?? defaultConfigPath,
+    optionValue(argv, "--config") ??
+      env.TALLYBURN_CONFIG ??
+      defaultConfigPath(env, taskHome),
   );
   const fileConfig = await loadFileConfig(configPath);
 
@@ -161,16 +170,16 @@ export async function resolveConfig(
     codexHome,
     claudeHome,
     ...(codexExecutable
-      ? { codexExecutable: resolve(codexExecutable) }
+      ? { codexExecutable: normalizeExecutable(codexExecutable) }
       : {}),
     ...(claudeExecutable
-      ? { claudeExecutable: resolve(claudeExecutable) }
+      ? { claudeExecutable: normalizeExecutable(claudeExecutable) }
       : {}),
     color:
       !argv.includes("--no-color") &&
       env.NO_COLOR === undefined &&
       fileConfig.color !== false,
-    once: argv.includes("--once"),
+    once: command === "snapshot" || argv.includes("--once"),
     json: argv.includes("--json"),
     demo: argv.includes("--demo"),
     backfill:
@@ -222,6 +231,12 @@ export async function resolveConfig(
   return config;
 }
 
+function normalizeExecutable(value: string): string {
+  return isAbsolute(value) || /[\\/]/.test(value)
+    ? resolve(value)
+    : value;
+}
+
 export function detectCommand(argv: readonly string[]): Command {
   const positional: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
@@ -260,6 +275,7 @@ export function detectCommand(argv: readonly string[]): Command {
   const command = positional[0] ?? "watch";
   if (
     command === "watch" ||
+    command === "snapshot" ||
     command === "stream" ||
     command === "doctor" ||
     command === "statusline"
@@ -271,12 +287,45 @@ export function detectCommand(argv: readonly string[]): Command {
 
 export function resolveStateDirectory(
   env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  home = homedir(),
 ): string {
-  const taskHome = homedir();
-  return resolve(
+  return pathForPlatform(platform).resolve(
     env.TALLYBURN_STATE_DIR ??
-      join(env.XDG_STATE_HOME ?? join(taskHome, ".local", "state"), "tallyburn"),
+      defaultStateDirectory(env, home, platform),
   );
+}
+
+export function defaultConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const paths = pathForPlatform(platform);
+  const root =
+    env.XDG_CONFIG_HOME ??
+    (
+      platform === "win32"
+        ? env.APPDATA ?? paths.join(home, "AppData", "Roaming")
+        : paths.join(home, ".config")
+    );
+  return paths.join(root, "tallyburn", "config.json");
+}
+
+export function defaultStateDirectory(
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const paths = pathForPlatform(platform);
+  const root =
+    env.XDG_STATE_HOME ??
+    (
+      platform === "win32"
+        ? env.LOCALAPPDATA ?? paths.join(home, "AppData", "Local")
+        : paths.join(home, ".local", "state")
+    );
+  return paths.join(root, "tallyburn");
 }
 
 function optionValue(
@@ -370,4 +419,8 @@ function numberOrString(value: unknown): string | undefined {
   return typeof value === "number" || typeof value === "string"
     ? String(value)
     : undefined;
+}
+
+function pathForPlatform(platform: NodeJS.Platform): PlatformPath {
+  return platform === "win32" ? win32 : posix;
 }

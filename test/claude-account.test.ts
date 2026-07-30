@@ -123,6 +123,16 @@ async function fakeClaude(
 ): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "tallyburn-claude-auth-"));
   context.after(async () => rm(directory, { recursive: true, force: true }));
+  if (process.platform === "win32") {
+    const script = join(directory, "claude-fixture.cjs");
+    const executable = join(directory, "claude.cmd");
+    await writeFile(script, `${body}\n`);
+    await writeFile(
+      executable,
+      `@echo off\r\n"${process.execPath}" "%~dp0claude-fixture.cjs" %*\r\n`,
+    );
+    return executable;
+  }
   const executable = join(directory, "claude");
   await writeFile(
     executable,

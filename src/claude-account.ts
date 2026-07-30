@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { prepareCommandLaunch } from "./command-launch.js";
 import { asRecord, readString } from "./json.js";
 import type { ProviderAccountStatus } from "./model.js";
 
@@ -53,14 +54,19 @@ export async function readClaudeAccountContext(
     : Date.now();
 
   return new Promise((resolve) => {
-    execFile(
+    const launch = prepareCommandLaunch(
       options.executable ?? "claude",
       ["auth", "status", "--json"],
+    );
+    execFile(
+      launch.command,
+      launch.args,
       {
         encoding: "utf8",
         timeout: timeoutMs,
         maxBuffer: maxOutputBytes,
-        env: process.env,
+        env: launch.env,
+        windowsHide: true,
         ...(options.signal ? { signal: options.signal } : {}),
       },
       (error, stdout) => {

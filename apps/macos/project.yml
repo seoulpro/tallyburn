@@ -47,6 +47,21 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: true
         GENERATE_INFOPLIST_FILE: false
+    postBuildScripts:
+      - name: Embed collection engine
+        basedOnDependencyAnalysis: false
+        script: |
+          if [[ -n "${TALLYBURN_ENGINE_EXECUTABLE:-}" ]]; then
+            if [[ -z "${TALLYBURN_ENGINE_NOTICES:-}" ]]; then
+              echo "TALLYBURN_ENGINE_NOTICES is required when embedding an engine." >&2
+              exit 65
+            fi
+            "$SRCROOT/../../scripts/embed-macos-engine.sh" \
+              "$TALLYBURN_ENGINE_EXECUTABLE" \
+              "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH" \
+              "$ARCHS" \
+              "$TALLYBURN_ENGINE_NOTICES"
+          fi
   TallyburnTests:
     type: bundle.unit-test
     platform: macOS

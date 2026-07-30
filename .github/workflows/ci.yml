@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   node:
-    name: Node.js ${{ matrix.node }}
+    name: Linux · Node.js ${{ matrix.node }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -39,6 +39,95 @@ jobs:
       - name: Test
         run: pnpm test
 
+  windows:
+    name: Windows CLI · Node.js ${{ matrix.node }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - "20.11"
+          - "24"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install pnpm
+        run: npm install --global pnpm@10.34.5
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check and build
+        run: |
+          pnpm check
+          pnpm build
+      - name: Test portable CLI core
+        run: >-
+          node --test
+          dist/test/command-launch.test.js
+          dist/test/claude-account.test.js
+          dist/test/codex-account.test.js
+          dist/test/config.test.js
+          dist/test/display.test.js
+          dist/test/duration.test.js
+          dist/test/public-api.test.js
+          dist/test/render.test.js
+          dist/test/store.test.js
+      - name: Smoke-test Windows command paths
+        run: |
+          node dist/src/cli.js --version
+          node dist/src/cli.js snapshot --demo --json
+          node dist/src/cli.js doctor --demo --json
+      - name: Smoke-test Windows provider shims
+        run: |
+          $fixture = "$env:RUNNER_TEMP\Tallyburn Provider Fixtures"
+          New-Item -ItemType Directory -Force -Path $fixture | Out-Null
+          Set-Content -Encoding ascii -Path "$fixture\codex.cmd" -Value "@echo off`r`necho codex-fixture 1.0.0"
+          Set-Content -Encoding ascii -Path "$fixture\claude.cmd" -Value "@echo off`r`necho claude-fixture 1.0.0"
+          $json = node dist/src/cli.js doctor --demo --json --codex-executable "$fixture\codex.cmd" --claude-executable "$fixture\claude.cmd"
+          $report = $json | ConvertFrom-Json
+          if (-not $report.clients.codex.available) { throw "Codex .cmd shim was not detected" }
+          if (-not $report.clients.claude.available) { throw "Claude .cmd shim was not detected" }
+      - name: Install and run Windows package
+        run: |
+          pnpm cli:stage
+          npm pack ./build/npm/tallyburn --pack-destination ./build/npm
+          $archive = (Get-ChildItem build/npm/tallyburn-*.tgz).FullName
+          $prefix = "$env:RUNNER_TEMP\tallyburn-install"
+          npm install --prefix $prefix $archive
+          & "$prefix\node_modules\.bin\tallyburn.cmd" --version
+          & "$prefix\node_modules\.bin\tallyburn.cmd" snapshot --demo --json
+
+  package:
+    name: npm package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Install pnpm
+        run: npm install --global pnpm@10.34.5
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build verified package
+        run: pnpm cli:pack
+      - name: Reject unintended package content
+        run: |
+          if tar -tf build/npm/tallyburn-*.tgz | grep -Ei '(^|/)(README|docs|test)([./]|$)'; then
+            exit 1
+          fi
+      - name: Install and run packaged CLI
+        run: |
+          npm install --prefix "$RUNNER_TEMP/tallyburn-install" build/npm/tallyburn-*.tgz
+          "$RUNNER_TEMP/tallyburn-install/node_modules/.bin/tallyburn" --version
+          "$RUNNER_TEMP/tallyburn-install/node_modules/.bin/tallyburn" snapshot --demo --json
+          "$RUNNER_TEMP/tallyburn-install/node_modules/.bin/tallyburn" doctor --demo --json
+
   macos:
     name: macOS
     runs-on: macos-26
@@ -57,8 +146,6 @@ jobs:
           brew install xcodegen
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build helper
-        run: pnpm build
       - name: Lint Swift
         run: >-
           xcrun swift-format lint --recursive
@@ -76,3 +163,28 @@ jobs:
           -derivedDataPath build/macos-ci
           CODE_SIGNING_ALLOWED=NO
           test
+      - name: Build standalone collection engine
+        run: pnpm engine:macos
+      - name: Build unsigned Release app with embedded engine
+        env:
+          TALLYBURN_ENGINE_EXECUTABLE: ${{ github.workspace }}/build/engine/tallyburn
+          TALLYBURN_ENGINE_NOTICES: ${{ github.workspace }}/build/engine/CollectionEngineNotices.txt
+        run: >-
+          xcodebuild -quiet
+          -project apps/macos/Tallyburn.xcodeproj
+          -scheme Tallyburn
+          -configuration Release
+          -derivedDataPath build/macos-ci-release
+          CODE_SIGNING_ALLOWED=NO
+          clean build
+      - name: Smoke-test embedded engine
+        run: |
+          helper="build/macos-ci-release/Build/Products/Release/Tallyburn.app/Contents/Helpers/tallyburn"
+          expected_version="$(node -p "require('./package.json').version")"
+          test -x "$helper"
+          test "$("$helper" --version)" = "$expected_version"
+          architectures=" $(lipo -archs "$helper") "
+          for architecture in arm64 x86_64; do
+            [[ "$architectures" == *" $architecture "* ]]
+          done
+          codesign --verify --strict "$helper"

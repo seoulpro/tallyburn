@@ -285,6 +285,43 @@ final class SidecarLaunchPolicyTests: XCTestCase {
     )
   }
 
+  func testBundledEnginePrefersTheHelpersDirectory() throws {
+    let bundleURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(
+        "\(UUID().uuidString).app",
+        isDirectory: true
+      )
+
+    let helpers =
+      bundleURL
+      .appendingPathComponent("Contents", isDirectory: true)
+      .appendingPathComponent("Helpers", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: helpers,
+      withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: bundleURL) }
+
+    let bundled = helpers.appendingPathComponent("tallyburn")
+    let fallback = helpers.appendingPathComponent("fallback")
+    for executable in [bundled, fallback] {
+      try Data("#!/bin/sh\n".utf8).write(to: executable)
+      try FileManager.default.setAttributes(
+        [.posixPermissions: 0o700],
+        ofItemAtPath: executable.path
+      )
+    }
+
+    XCTAssertEqual(
+      SidecarLaunchPolicy.bundledExecutable(
+        bundleURL: bundleURL,
+        auxiliaryExecutable: fallback,
+        appExecutable: nil
+      ),
+      bundled
+    )
+  }
+
   func testAppBundlesAnEmptySidecarConfiguration() throws {
     let url = try XCTUnwrap(
       Bundle.main.url(

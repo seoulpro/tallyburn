@@ -15,9 +15,19 @@ import {
 } from "./monitor.js";
 import { runClaudeStatuslineCommand } from "./otel.js";
 import { renderSnapshot } from "./render.js";
-import { snapshotEnvelope, snapshotForJson } from "./serialization.js";
+import { snapshotEnvelope } from "./serialization.js";
 import { writeClaudeQuotaState } from "./state.js";
 import { VERSION } from "./version.js";
+
+stdout.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EPIPE") {
+    process.exit(0);
+  }
+  stderr.write(
+    `tallyburn: ${sanitizeTerminalText(error.message || "stdout failed")}\n`,
+  );
+  process.exit(1);
+});
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -49,7 +59,11 @@ async function main(): Promise<void> {
         monitor.sources,
         monitor.snapshot().quotas.claude,
       );
-      stdout.write(`${result.output}\n`);
+      stdout.write(
+        config.json
+          ? `${JSON.stringify(result.report, null, 2)}\n`
+          : `${result.output}\n`,
+      );
       if (!result.healthy) {
         process.exitCode = 1;
       }
@@ -71,7 +85,9 @@ async function main(): Promise<void> {
       }
       const snapshot = monitor.snapshot();
       if (config.json) {
-        stdout.write(`${JSON.stringify(snapshotForJson(snapshot), null, 2)}\n`);
+        stdout.write(
+          `${JSON.stringify(snapshotEnvelope(snapshot, 1), null, 2)}\n`,
+        );
       } else {
         stdout.write(
           `${renderSnapshot(snapshot, {
@@ -300,24 +316,39 @@ function helpText(): string {
 
 Usage
   tallyburn [watch] [options]
+  tallyburn snapshot [options]
   tallyburn stream [options]
   tallyburn doctor [options]
   tallyburn statusline
 
-Options
+Commands
+  watch                  live dashboard in a TTY; one snapshot when piped
+  snapshot               print one snapshot and exit
+  stream                 emit versioned NDJSON snapshots until stopped
+  doctor                 inspect clients, sources, and optional live paths
+  statusline             Claude Code status-line adapter
+
+Display
   --windows 1h,3h,12h    rolling windows (up to six, max 30d)
   --refresh 1s           dashboard refresh interval
   --provider all         codex, claude, gemini, copilot, qwen, llamacpp, vllm
-  --once                 print one snapshot and exit
-  --json                 print one machine-readable snapshot and exit
+  --once                 print once (legacy alias for snapshot)
+  --json                 emit versioned machine-readable JSON
   --demo                 use synthetic data
+  --no-color             disable ANSI color
+
+Live collection
   --otel-port 4318       receive official CLI OTLP/HTTP on loopback
   --otel-logs            opt in to allowlisted /v1/logs events
   --llamacpp-metrics URL poll a local llama.cpp /metrics endpoint
   --vllm-metrics URL     poll a local vLLM /metrics endpoint
+
+Account metadata
   --codex-account        read quota through official Codex app-server
   --claude-account       read plan type through official Claude auth status
   --offline              disable authenticated provider control-plane reads
+
+Files and executables
   --no-backfill          do not open local transcript JSONL files
   --codex-home PATH      override CODEX_HOME
   --claude-home PATH     override CLAUDE_CONFIG_DIR
@@ -326,9 +357,15 @@ Options
   --claude-executable PATH
                          override the official Claude executable
   --config PATH          JSON config file
-  --no-color             disable ANSI color
   -h, --help             show help
   -v, --version          show version
+
+Examples
+  tallyburn
+  tallyburn snapshot --provider codex,claude
+  tallyburn snapshot --json
+  tallyburn doctor --json
+  tallyburn stream --refresh 1s
 
 Tallyburn never opens provider credentials. Optional account discovery invokes
 official client status commands and keeps only allowlisted plan fields. OTLP

@@ -74,10 +74,7 @@ async function fakeAppServer(
 ): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "tallyburn-app-server-"));
   context.after(async () => rm(directory, { recursive: true, force: true }));
-  const executable = join(directory, "fake-app-server");
-  await writeFile(
-    executable,
-    `#!/usr/bin/env node
+  const body = `
 const readline = require("node:readline");
 const lines = readline.createInterface({ input: process.stdin });
 lines.on("line", (line) => {
@@ -102,7 +99,21 @@ lines.on("line", (line) => {
   }
 });
 process.on("SIGTERM", () => process.exit(0));
-`,
+`;
+  if (process.platform === "win32") {
+    const script = join(directory, "fake-app-server.cjs");
+    const executable = join(directory, "fake-app-server.cmd");
+    await writeFile(script, body);
+    await writeFile(
+      executable,
+      `@echo off\r\n"${process.execPath}" "%~dp0fake-app-server.cjs" %*\r\n`,
+    );
+    return executable;
+  }
+  const executable = join(directory, "fake-app-server");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node${body}`,
     { mode: 0o755 },
   );
   await chmod(executable, 0o755);
