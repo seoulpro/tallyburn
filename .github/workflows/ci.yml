@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node.js ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - "20.11"
+          - "24"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install pnpm
+        run: npm install --global pnpm@10.34.5
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm check
+      - name: Test
+        run: pnpm test
+
+  macos:
+    name: macOS
+    runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Install build tools
+        run: |
+          npm install --global pnpm@10.34.5
+          brew install xcodegen
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build helper
+        run: pnpm build
+      - name: Lint Swift
+        run: >-
+          xcrun swift-format lint --recursive
+          apps/macos/Tallyburn
+          apps/macos/TallyburnTests
+      - name: Generate Xcode project
+        working-directory: apps/macos
+        run: xcodegen generate
+      - name: Test macOS app
+        run: >-
+          xcodebuild -quiet
+          -project apps/macos/Tallyburn.xcodeproj
+          -scheme Tallyburn
+          -configuration Debug
+          -derivedDataPath build/macos-ci
+          CODE_SIGNING_ALLOWED=NO
+          test
