@@ -164,9 +164,12 @@ test("long-lived monitor observes appended usage without restarting", async (con
     });
   });
   await monitor.start();
-  if (process.platform === "darwin") {
-    assert.equal(monitor.collectionMode, "watch");
-  }
+  assert.equal(
+    monitor.collectionMode,
+    process.platform === "darwin" || process.platform === "win32"
+      ? "watch"
+      : "poll",
+  );
 
   await appendFile(
     log,
@@ -272,8 +275,10 @@ test("watch topology recovers when a provider tree appears later", async (contex
   await mkdir(project, { recursive: true });
   await writeFile(log, `${claudeUsageLine(now, "first", 10)}\n`);
   await waitFor(() => monitor.snapshot().windows[0]?.all.total === 10);
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin" || process.platform === "win32") {
     await waitFor(() => monitor.collectionMode === "watch");
+  } else {
+    assert.equal(monitor.collectionMode, "poll");
   }
 
   await appendFile(

@@ -656,6 +656,11 @@ export class TallyburnMonitor {
     ) {
       return;
     }
+    if (!supportsReliableRecursiveWatch()) {
+      this.#disableFilesystemWatchers();
+      this.#syncReconcileTimer();
+      return;
+    }
 
     const targets = this.#filesystemTargets();
     const desiredPaths = new Set(
@@ -1010,4 +1015,8 @@ function setsEqual<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
     }
   }
   return true;
+}
+
+function supportsReliableRecursiveWatch(): boolean {
+  return process.platform === "darwin" || process.platform === "win32";
 }
