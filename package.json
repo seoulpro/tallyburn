@@ -32,6 +32,8 @@
     "engine:macos": "pnpm run build && node scripts/build-macos-engine.mjs",
     "start": "node dist/src/cli.js",
     "macos:build": "./scripts/build-macos-dev.sh",
+    "macos:release": "./scripts/release-macos.sh release",
+    "macos:release:preflight": "./scripts/release-macos.sh preflight",
     "prepack": "pnpm run test"
   },
   "engines": {
