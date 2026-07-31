@@ -12,6 +12,7 @@ test("the macOS release fails closed without distribution credentials", async ()
   assert.match(script, /TALLYBURN_NOTARY_PROFILE/);
   assert.match(script, /notarytool history/);
   assert.match(script, /CODE_SIGNING_ALLOWED=YES/);
+  assert.match(script, /CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO/);
   assert.match(script, /ENABLE_HARDENED_RUNTIME=YES/);
 });
 
@@ -19,6 +20,8 @@ test("the macOS release notarizes, staples, and verifies the app", async () => {
   const script = await readFile(releaseScript, "utf8");
 
   assert.match(script, /notarytool submit/);
+  assert.match(script, /notary_status.*Accepted/s);
+  assert.match(script, /get-task-allow entitlement/);
   assert.match(script, /stapler staple/);
   assert.match(script, /stapler validate/);
   assert.match(script, /codesign --verify --deep --strict/);

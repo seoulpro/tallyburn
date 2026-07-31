@@ -123,6 +123,7 @@ fi
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$signing_identity" \
     DEVELOPMENT_TEAM="$team_id" \
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     ENABLE_HARDENED_RUNTIME=YES \
     OTHER_CODE_SIGN_FLAGS="--timestamp" \
     build
@@ -132,6 +133,21 @@ app_path="$derived_data/Build/Products/Release/Tallyburn.app"
 [[ -d "$app_path" ]] || fail "The Release app was not produced."
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+entitlements_path="$release_root/Tallyburn.entitlements.plist"
+/usr/bin/codesign \
+  -d \
+  --entitlements :- \
+  "$app_path" \
+  >"$entitlements_path" \
+  2>/dev/null
+if get_task_allow="$(
+  /usr/libexec/PlistBuddy \
+    -c "Print :com.apple.security.get-task-allow" \
+    "$entitlements_path" \
+    2>/dev/null
+)" && [[ "$get_task_allow" == "true" ]]; then
+  fail "The Release app requests the forbidden get-task-allow entitlement."
+fi
 /usr/bin/lipo -archs "$app_path/Contents/MacOS/Tallyburn" |
   /usr/bin/grep -q "arm64" ||
   fail "The app is missing the arm64 architecture."
@@ -154,10 +170,25 @@ artifact="$release_root/Tallyburn-$package_version-macos-universal.zip"
   "$app_path" \
   "$artifact"
 
+notary_result="$release_root/notary-result.json"
 /usr/bin/xcrun notarytool submit \
   "$artifact" \
   --keychain-profile "$notary_profile" \
-  --wait
+  --wait \
+  --output-format json \
+  >"$notary_result"
+notary_status="$(
+  /usr/bin/plutil -extract status raw -o - "$notary_result"
+)"
+if [[ "$notary_status" != "Accepted" ]]; then
+  notary_id="$(
+    /usr/bin/plutil -extract id raw -o - "$notary_result"
+  )"
+  /usr/bin/xcrun notarytool log \
+    "$notary_id" \
+    --keychain-profile "$notary_profile" || true
+  fail "Apple notarization finished with status $notary_status."
+fi
 /usr/bin/xcrun stapler staple "$app_path"
 /usr/bin/xcrun stapler validate "$app_path"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
