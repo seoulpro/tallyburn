@@ -171,9 +171,10 @@ function verifySubresourceIntegrity(contents, value) {
 
 function run(command, args) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, {
+    const launch = prepareLaunch(command, args);
+    const child = spawn(launch.command, launch.args, {
       cwd: projectRoot,
-      env: process.env,
+      env: launch.env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -200,4 +201,57 @@ function run(command, args) {
       );
     });
   });
+}
+
+function prepareLaunch(command, args) {
+  if (
+    process.platform !== "win32" ||
+    !/\.(?:bat|cmd)$/i.test(command)
+  ) {
+    return { command, args, env: process.env };
+  }
+
+  const values = [command, ...args];
+  for (const value of values) {
+    if (/[\0\r\n"]/.test(value)) {
+      throw new Error("A Windows command value contains unsupported characters.");
+    }
+  }
+
+  const targetVariable = "TALLYBURN_VERIFY_COMMAND";
+  const argumentPrefix = "TALLYBURN_VERIFY_ARGUMENT_";
+  const reserved = new Set(
+    [targetVariable, ...args.map((_, index) => `${argumentPrefix}${index}`)].map(
+      (name) => name.toLowerCase(),
+    ),
+  );
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) => !reserved.has(name.toLowerCase()),
+    ),
+  );
+  env[targetVariable] = command;
+  args.forEach((argument, index) => {
+    env[`${argumentPrefix}${index}`] = argument;
+  });
+  const references = args
+    .map((_, index) => ` "%${argumentPrefix}${index}%"`)
+    .join("");
+  const commandLine = `""%${targetVariable}%"${references}"`;
+
+  return {
+    command: environmentValue(process.env, "ComSpec") ?? "cmd.exe",
+    args: ["/d", "/s", "/v:off", "/c", commandLine],
+    env,
+  };
+}
+
+function environmentValue(env, key) {
+  const normalized = key.toLowerCase();
+  for (const [candidate, value] of Object.entries(env)) {
+    if (candidate.toLowerCase() === normalized) {
+      return value;
+    }
+  }
+  return undefined;
 }

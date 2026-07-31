@@ -26,6 +26,9 @@ test("the npm release verifier downloads and checks the registry tarball", async
   assert.match(script, /"--ignore-scripts"/);
   assert.match(script, /"snapshot"[\s\S]*"--demo"[\s\S]*"--json"/);
   assert.match(script, /"doctor", "--demo", "--json"/);
+  assert.match(script, /process\.platform !== "win32"/);
+  assert.match(script, /"\/d", "\/s", "\/v:off", "\/c"/);
+  assert.doesNotMatch(script, /shell:\s*true/);
 });
 
 test("the macOS release verifier checks the downloaded public app", async () => {
