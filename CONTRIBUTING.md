@@ -26,6 +26,12 @@ pnpm test
 `pnpm test` compiles the project and runs the Node test suite against the build
 output.
 
+Release maintainers can verify an already-published npm version on any platform
+with `pnpm release:verify:npm -- <version>`. On macOS,
+`pnpm release:verify -- <version>` additionally verifies the signed and
+notarized GitHub release app. These commands download public artifacts and do
+not publish or modify a release.
+
 For macOS shell changes:
 
 ```bash

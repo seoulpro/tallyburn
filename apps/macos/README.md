@@ -158,6 +158,21 @@ Apple, staples the ticket, and produces
 slices. It requires a Developer ID Application certificate and valid
 notarization credentials.
 
+After publishing both the GitHub release and npm version, verify the exact
+public downloads rather than the local build output:
+
+```bash
+pnpm release:verify -- 0.1.0-beta.1
+```
+
+This downloads the release ZIP and npm tarball, validates registry integrity,
+Developer ID signing, the stapled notarization ticket, Gatekeeper acceptance,
+arm64 and x86_64 slices, embedded and npm CLI versions, demo snapshots, and the
+CLI doctor check. Reports and `SHA256SUMS` are written under
+`build/release-verification/<version>/`. The same verification can be run from
+the **Verify release** GitHub Actions workflow by entering a published version
+without the `v` prefix.
+
 Distribution is direct Developer ID. App Sandbox would require explicit
 user-selected access to the Codex and Claude data directories and additional
 constraints around the Codex child process.

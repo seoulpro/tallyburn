@@ -34,6 +34,8 @@
     "macos:build": "./scripts/build-macos-dev.sh",
     "macos:release": "./scripts/release-macos.sh release",
     "macos:release:preflight": "./scripts/release-macos.sh preflight",
+    "release:verify": "./scripts/verify-release-artifacts.sh",
+    "release:verify:npm": "node scripts/verify-public-npm.mjs",
     "prepack": "pnpm run test"
   },
   "engines": {
