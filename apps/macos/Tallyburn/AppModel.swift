@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
   @Published var vllmMetricsURL: String
   @Published var cliPath: String
   @Published var launchAtLogin: Bool
+  @Published private(set) var selectedSettingsPane: SettingsPane
   @Published private(set) var showRateInMenuBar: Bool
   @Published private(set) var miniMonitorEnabled: Bool
   @Published private(set) var providerColors: [String: String]
@@ -66,24 +67,40 @@ final class AppModel: ObservableObject {
     self.reconnectDelays = reconnectDelays
     self.terminateApplication = terminateApplication
     hasMonitoringConsent = defaults.bool(forKey: "monitoringConsent")
-    selectedWindow = defaults.string(forKey: "selectedWindow") ?? "1h"
+    let initialWindows = AppRollingWindowPresets.migrate(
+      defaults.string(forKey: "windows")
+    )
+    windows = initialWindows
+    let savedSelectedWindow =
+      defaults.string(forKey: "selectedWindow") ?? "1h"
+    let availableWindows =
+      initialWindows.split(separator: ",").map(String.init)
+    selectedWindow =
+      availableWindows.contains(savedSelectedWindow)
+      ? savedSelectedWindow
+      : availableWindows.first ?? "1h"
     mode =
       MonitoringMode(
         rawValue: defaults.string(forKey: "monitoringMode") ?? ""
       ) ?? .standard
-    windows = defaults.string(forKey: "windows") ?? "1h,3h,12h"
     codexAccount = defaults.bool(forKey: "codexAccount")
     otelMetrics = defaults.bool(forKey: "otelMetrics")
     llamaCppMetricsURL =
       defaults.string(forKey: "llamaCppMetricsURL") ?? ""
     vllmMetricsURL = defaults.string(forKey: "vllmMetricsURL") ?? ""
     cliPath = defaults.string(forKey: "cliPath") ?? ""
+    selectedSettingsPane =
+      SettingsPane(
+        rawValue: defaults.string(forKey: "selectedSettingsPane") ?? ""
+      ) ?? .general
     launchAtLogin = SMAppService.mainApp.status == .enabled
     showRateInMenuBar = defaults.bool(forKey: "showRateInMenuBar")
     miniMonitorEnabled = defaults.bool(forKey: "miniMonitorEnabled")
     providerColors = loadProviderColorOverrides(
       defaults.dictionary(forKey: "providerColors")
     )
+    defaults.set(windows, forKey: "windows")
+    defaults.set(selectedWindow, forKey: "selectedWindow")
     if hasMonitoringConsent, automaticallyStartsMonitoring {
       start()
     }
@@ -500,13 +517,13 @@ final class AppModel: ObservableObject {
   ) -> Bool {
     guard
       let normalizedWindows =
-        RollingWindowConfiguration.normalize(windows)
+        AppRollingWindowPresets.normalize(windows)
     else {
       settingsError =
         localized(
           "settings.error.windows",
           fallback:
-            "Use 1–6 unique durations such as 1h,3h,12h (maximum 30d)."
+            "Choose 1–4 of the available rolling periods."
         )
       return false
     }
@@ -580,6 +597,11 @@ final class AppModel: ObservableObject {
   func setMiniMonitorEnabled(_ enabled: Bool) {
     miniMonitorEnabled = enabled
     defaults.set(enabled, forKey: "miniMonitorEnabled")
+  }
+
+  func setSelectedSettingsPane(_ pane: SettingsPane) {
+    selectedSettingsPane = pane
+    defaults.set(pane.rawValue, forKey: "selectedSettingsPane")
   }
 
   func setProviderColors(_ colors: [String: String]) {

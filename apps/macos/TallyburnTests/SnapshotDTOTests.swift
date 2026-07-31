@@ -543,6 +543,31 @@ final class RollingWindowConfigurationTests: XCTestCase {
       )
     )
   }
+
+  func testAppPresetsCanonicalizeSupportedSelection() {
+    XCTAssertEqual(
+      AppRollingWindowPresets.normalize("12H, 1h,6h"),
+      "1h,6h,12h"
+    )
+  }
+
+  func testAppPresetsRejectCustomAndOvercrowdedSelection() {
+    XCTAssertNil(AppRollingWindowPresets.normalize("30m,1h"))
+    XCTAssertNil(
+      AppRollingWindowPresets.normalize("1h,3h,6h,12h,24h")
+    )
+  }
+
+  func testAppPresetsMigrateLegacySelectionWithoutLosingSupportedWindows() {
+    XCTAssertEqual(
+      AppRollingWindowPresets.migrate("30m,12h,3h"),
+      "3h,12h"
+    )
+    XCTAssertEqual(
+      AppRollingWindowPresets.migrate("30m"),
+      AppRollingWindowPresets.defaultValue
+    )
+  }
 }
 
 @MainActor
@@ -1085,17 +1110,39 @@ final class SettingsLayoutTests: XCTestCase {
       reconnectDelays: [],
       terminateApplication: {}
     )
+    let expandAdvancedSettings =
+      ProcessInfo.processInfo.environment[
+        "TALLYBURN_VISUAL_REVIEW_EXPAND_ADVANCED"
+      ] == "1"
+    let reviewPane =
+      ProcessInfo.processInfo.environment[
+        "TALLYBURN_VISUAL_REVIEW_PANE"
+      ]
+      .flatMap(SettingsPane.init(rawValue:)) ?? .colors
     let hostingView = NSHostingView(
       rootView:
-        SettingsView(model: model)
+        SettingsView(
+          model: model,
+          expandAdvancedSettings: expandAdvancedSettings,
+          initialPane: reviewPane
+        )
         .environment(\.locale, Locale(identifier: "ko"))
         .environment(\.colorScheme, .dark)
     )
-    hostingView.frame = NSRect(x: 0, y: 0, width: 520, height: 620)
+    hostingView.frame = NSRect(
+      x: 0,
+      y: 0,
+      width: 520,
+      height: reviewPane.windowHeight
+    )
     hostingView.layoutSubtreeIfNeeded()
 
     XCTAssertEqual(hostingView.fittingSize.width, 520, accuracy: 1)
-    XCTAssertGreaterThanOrEqual(hostingView.fittingSize.height, 620)
+    XCTAssertEqual(
+      hostingView.fittingSize.height,
+      reviewPane.windowHeight,
+      accuracy: 1
+    )
 
     guard
       let output = ProcessInfo.processInfo.environment[
@@ -1115,6 +1162,44 @@ final class SettingsLayoutTests: XCTestCase {
       representation.representation(using: .png, properties: [:])
     )
     try data.write(to: URL(fileURLWithPath: output), options: .atomic)
+  }
+
+  func testEverySettingsPaneHasAStableNativeWindowSize() {
+    let suiteName = "TallyburnTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let model = AppModel(
+      defaults: defaults,
+      client: FakeSidecarClient(),
+      automaticallyStartsMonitoring: false,
+      reconnectDelays: [],
+      terminateApplication: {}
+    )
+
+    for pane in SettingsPane.allCases {
+      let hostingView = NSHostingView(
+        rootView: SettingsView(
+          model: model,
+          initialPane: pane
+        )
+      )
+      hostingView.frame = NSRect(
+        x: 0,
+        y: 0,
+        width: 520,
+        height: pane.windowHeight
+      )
+      hostingView.layoutSubtreeIfNeeded()
+
+      XCTAssertEqual(hostingView.fittingSize.width, 520, accuracy: 1)
+      XCTAssertEqual(
+        hostingView.fittingSize.height,
+        pane.windowHeight,
+        accuracy: 1
+      )
+    }
   }
 }
 
@@ -1234,7 +1319,7 @@ final class AppModelLifecycleTests: XCTestCase {
 
     let didApply = model.applySettings(
       mode: .metricsOnly,
-      windows: " 30M, 1h,12H ",
+      windows: " 12H, 1h,6H ",
       codexAccount: true,
       otelMetrics: true,
       cliPath: ""
@@ -1243,7 +1328,7 @@ final class AppModelLifecycleTests: XCTestCase {
     XCTAssertTrue(didApply)
     XCTAssertTrue(model.hasMonitoringConsent)
     XCTAssertEqual(model.mode, .metricsOnly)
-    XCTAssertEqual(model.windows, "30m,1h,12h")
+    XCTAssertEqual(model.windows, "1h,6h,12h")
     XCTAssertTrue(model.codexAccount)
     XCTAssertTrue(model.otelMetrics)
     XCTAssertNil(model.settingsError)
@@ -1254,9 +1339,56 @@ final class AppModelLifecycleTests: XCTestCase {
     )
     XCTAssertEqual(
       defaults.string(forKey: "windows"),
-      "30m,1h,12h"
+      "1h,6h,12h"
     )
     XCTAssertTrue(defaults.bool(forKey: "otelMetrics"))
+  }
+
+  func testAppModelMigratesLegacyRollingWindowsAndSelectedWindow() {
+    let (defaults, suiteName) = makeDefaults(consent: false)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    defaults.set("30m,12h,3h", forKey: "windows")
+    defaults.set("30m", forKey: "selectedWindow")
+
+    let model = AppModel(
+      defaults: defaults,
+      client: FakeSidecarClient(),
+      automaticallyStartsMonitoring: false,
+      reconnectDelays: [],
+      terminateApplication: {}
+    )
+
+    XCTAssertEqual(model.windows, "3h,12h")
+    XCTAssertEqual(model.selectedWindow, "3h")
+    XCTAssertEqual(defaults.string(forKey: "windows"), "3h,12h")
+    XCTAssertEqual(defaults.string(forKey: "selectedWindow"), "3h")
+  }
+
+  func testSettingsPaneSelectionIsRestored() {
+    let (defaults, suiteName) = makeDefaults(consent: false)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    defaults.set(SettingsPane.advanced.rawValue, forKey: "selectedSettingsPane")
+
+    let model = AppModel(
+      defaults: defaults,
+      client: FakeSidecarClient(),
+      automaticallyStartsMonitoring: false,
+      reconnectDelays: [],
+      terminateApplication: {}
+    )
+
+    XCTAssertEqual(model.selectedSettingsPane, .advanced)
+
+    model.setSelectedSettingsPane(.colors)
+
+    let restoredModel = AppModel(
+      defaults: defaults,
+      client: FakeSidecarClient(),
+      automaticallyStartsMonitoring: false,
+      reconnectDelays: [],
+      terminateApplication: {}
+    )
+    XCTAssertEqual(restoredModel.selectedSettingsPane, .colors)
   }
 
   func testUnchangedMonitoringSettingsDoNotRestart() {

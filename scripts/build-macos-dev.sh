@@ -20,7 +20,11 @@ else
 fi
 
 "${pnpm_command[@]}" --dir "$project_root" install --frozen-lockfile
-"${pnpm_command[@]}" --dir "$project_root" build
+# Debug builds use the same self-contained collection engine as release
+# builds. This keeps a source-checkout app runnable when launched directly
+# from Finder or Xcode, without relying on development-only environment
+# variables or a manually configured CLI path.
+"${pnpm_command[@]}" --dir "$project_root" run engine:macos
 
 (
   cd "$macos_root"
@@ -30,6 +34,8 @@ fi
     -scheme Tallyburn \
     -configuration Debug \
     -derivedDataPath "$derived_data" \
+    TALLYBURN_ENGINE_EXECUTABLE="$project_root/build/engine/tallyburn" \
+    TALLYBURN_ENGINE_NOTICES="$project_root/build/engine/CollectionEngineNotices.txt" \
     CODE_SIGNING_ALLOWED=NO \
     build
 )

@@ -4,7 +4,6 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 app_path="$project_root/build/macos/Build/Products/Debug/Tallyburn.app"
 app_executable="$app_path/Contents/MacOS/Tallyburn"
-cli_script="$project_root/dist/src/cli.js"
 
 "$project_root/scripts/build-macos-dev.sh"
 
@@ -33,11 +32,7 @@ if ((${#existing_pids[@]} > 0)); then
   done
 fi
 
-node_path="$(command -v node)"
-open -g \
-  --env "TALLYBURN_NODE_PATH=$node_path" \
-  --env "TALLYBURN_CLI_SCRIPT=$cli_script" \
-  "$app_path"
+open -g "$app_path"
 
 launched=0
 for _ in {1..30}; do

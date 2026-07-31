@@ -171,6 +171,48 @@ enum RollingWindowConfiguration {
   }
 }
 
+enum AppRollingWindowPresets {
+  static let labels = ["1h", "3h", "6h", "12h", "24h", "7d"]
+  static let defaultValue = "1h,3h,12h"
+  static let maximumSelectionCount = 4
+
+  static func normalize(_ input: String) -> String? {
+    guard
+      let normalized = RollingWindowConfiguration.normalize(input)
+    else {
+      return nil
+    }
+    let selected = Set(normalized.split(separator: ",").map(String.init))
+    guard
+      (1...maximumSelectionCount).contains(selected.count),
+      selected.allSatisfy(labels.contains)
+    else {
+      return nil
+    }
+    return labels.filter(selected.contains).joined(separator: ",")
+  }
+
+  static func migrate(_ input: String?) -> String {
+    guard let input else { return defaultValue }
+    if let normalized = normalize(input) {
+      return normalized
+    }
+    guard
+      let normalized = RollingWindowConfiguration.normalize(input)
+    else {
+      return defaultValue
+    }
+    let selected = Set(normalized.split(separator: ",").map(String.init))
+    let supported =
+      labels
+      .filter(selected.contains)
+      .prefix(maximumSelectionCount)
+    return supported.isEmpty
+      ? defaultValue
+      : supported.joined(separator: ",")
+  }
+}
+
 enum SidecarLaunchPolicy {
   static func isDistinctExecutable(
     _ candidate: URL,

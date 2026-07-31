@@ -1,6 +1,50 @@
 import AppKit
 import SwiftUI
 
+enum SettingsPane: String, CaseIterable, Identifiable {
+  case general
+  case colors
+  case advanced
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .general:
+      return localized(
+        "settings.tab.general",
+        fallback: "General"
+      )
+    case .colors:
+      return localized(
+        "settings.tab.colors",
+        fallback: "Colors"
+      )
+    case .advanced:
+      return localized(
+        "settings.tab.advanced",
+        fallback: "Advanced"
+      )
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .general: return "gearshape"
+    case .colors: return "paintpalette"
+    case .advanced: return "wrench.and.screwdriver"
+    }
+  }
+
+  var windowHeight: CGFloat {
+    switch self {
+    case .general: return 680
+    case .colors: return 560
+    case .advanced: return 320
+    }
+  }
+}
+
 private struct SettingsDraft: Equatable {
   var mode: MonitoringMode
   var windows: String
@@ -35,42 +79,126 @@ struct SettingsView: View {
   @ObservedObject var model: AppModel
   @State private var draft: SettingsDraft
   @State private var appliedDraft: SettingsDraft
+  @State private var selectedPane: SettingsPane
+  @State private var liveCLIExpanded = false
+  @State private var localModelsExpanded = false
+  @State private var collectionEngineExpanded = false
 
   private enum Layout {
     static let windowWidth: CGFloat = 520
-    static let minimumHeight: CGFloat = 620
+    static let rollingWindowColumns = [
+      GridItem(.flexible(), spacing: 8),
+      GridItem(.flexible(), spacing: 8),
+      GridItem(.flexible(), spacing: 8),
+    ]
   }
 
-  init(model: AppModel) {
+  init(
+    model: AppModel,
+    expandAdvancedSettings: Bool = false,
+    initialPane: SettingsPane? = nil
+  ) {
     self.model = model
     let draft = SettingsDraft(model: model)
     _draft = State(initialValue: draft)
     _appliedDraft = State(initialValue: draft)
+    _selectedPane = State(
+      initialValue: initialPane ?? model.selectedSettingsPane
+    )
+    _liveCLIExpanded = State(
+      initialValue: expandAdvancedSettings
+    )
+    _localModelsExpanded = State(
+      initialValue: expandAdvancedSettings
+    )
+    _collectionEngineExpanded = State(
+      initialValue: expandAdvancedSettings
+    )
   }
 
   var body: some View {
     VStack(spacing: 0) {
-      Form {
-        monitoringSection
-        localModelsSection
-        appearanceSection
-        helperSection
-        macOSSection
+      TabView(selection: $selectedPane) {
+        generalPane
+          .tabItem {
+            Label(
+              SettingsPane.general.title,
+              systemImage: SettingsPane.general.systemImage
+            )
+          }
+          .tag(SettingsPane.general)
 
-        if let error = model.settingsError {
-          settingsError(error)
-        }
+        colorsPane
+          .tabItem {
+            Label(
+              SettingsPane.colors.title,
+              systemImage: SettingsPane.colors.systemImage
+            )
+          }
+          .tag(SettingsPane.colors)
 
-        aboutSection
+        advancedPane
+          .tabItem {
+            Label(
+              SettingsPane.advanced.title,
+              systemImage: SettingsPane.advanced.systemImage
+            )
+          }
+          .tag(SettingsPane.advanced)
       }
-      .formStyle(.grouped)
 
       Divider()
 
       applyBar
     }
     .frame(width: Layout.windowWidth)
-    .frame(minHeight: Layout.minimumHeight)
+    .frame(height: selectedPane.windowHeight)
+    .navigationTitle(
+      localizedFormat(
+        "settings.window.title",
+        fallback: "%@ — Tallyburn Settings",
+        selectedPane.title
+      )
+    )
+    .onChange(of: selectedPane) { _, pane in
+      model.setSelectedSettingsPane(pane)
+    }
+  }
+
+  private var generalPane: some View {
+    Form {
+      monitoringSection
+      macOSSection
+
+      if let error = model.settingsError {
+        settingsError(error)
+      }
+
+      aboutSection
+    }
+    .formStyle(.grouped)
+  }
+
+  private var colorsPane: some View {
+    Form {
+      appearanceSection
+
+      if let error = model.settingsError {
+        settingsError(error)
+      }
+    }
+    .formStyle(.grouped)
+  }
+
+  private var advancedPane: some View {
+    Form {
+      advancedSection
+
+      if let error = model.settingsError {
+        settingsError(error)
+      }
+    }
+    .formStyle(.grouped)
   }
 
   private var appearanceSection: some View {
@@ -100,7 +228,7 @@ struct SettingsView: View {
           localized(
             "settings.providerColor.help",
             fallback:
-              "New providers appear here after Tallyburn observes them."
+              "Colors stay consistent across charts and meters. Custom providers appear after they are observed."
           )
         )
         .font(.caption)
@@ -141,20 +269,7 @@ struct SettingsView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
 
-      TextField(
-        localized(
-          "settings.rollingWindows",
-          fallback: "Rolling windows"
-        ),
-        text: $draft.windows
-      )
-      .help(
-        localized(
-          "settings.rollingWindows.help",
-          fallback:
-            "Comma-separated durations, for example 1h,3h,12h"
-        )
-      )
+      rollingWindowsPicker
 
       Toggle(
         localized(
@@ -166,34 +281,169 @@ struct SettingsView: View {
       .disabled(draft.mode != .standard)
 
       Text(
-        localized(
-          "settings.codexPlanLimits.help",
-          fallback:
-            "Uses your existing Codex sign-in to read provider-reported usage percentages and reset times. It does not run a model or spend tokens."
-        )
+        draft.mode == .standard
+          ? localized(
+            "settings.codexPlanLimits.help",
+            fallback:
+              "Uses your existing Codex sign-in to read provider-reported usage percentages and reset times. It does not run a model or spend tokens."
+          )
+          : localized(
+            "settings.codexPlanLimits.unavailable",
+            fallback:
+              "Available only in Standard local monitoring."
+          )
       )
       .font(.caption)
       .foregroundStyle(.secondary)
+    }
+  }
 
-      if draft.mode == .standard {
-        Toggle(
-          localized(
-            "settings.otelMetrics",
-            fallback: "Receive live CLI metrics"
-          ),
-          isOn: $draft.otelMetrics
+  private var rollingWindowsPicker: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(
+        localized(
+          "settings.rollingWindows",
+          fallback: "Rolling totals"
         )
+      )
 
+      LazyVGrid(
+        columns: Layout.rollingWindowColumns,
+        spacing: 8
+      ) {
+        ForEach(AppRollingWindowPresets.labels, id: \.self) { label in
+          Toggle(isOn: rollingWindowBinding(label)) {
+            Text(rollingWindowTitle(label))
+              .frame(maxWidth: .infinity)
+          }
+          .toggleStyle(.button)
+          .disabled(rollingWindowOptionDisabled(label))
+        }
+      }
+
+      HStack(alignment: .firstTextBaseline) {
         Text(
           localized(
-            "settings.otelMetrics.help",
+            "settings.rollingWindows.help",
             fallback:
-              "Listens for numeric Claude, Gemini, GitHub Copilot, and Qwen telemetry through local OTLP. Each CLI must be configured separately."
+              "Choose 1–4 periods to compare in History."
           )
         )
         .font(.caption)
         .foregroundStyle(.secondary)
+
+        Spacer()
+
+        Button(
+          localized(
+            "settings.rollingWindows.restore",
+            fallback: "Restore Defaults"
+          )
+        ) {
+          draft.windows = AppRollingWindowPresets.defaultValue
+        }
+        .disabled(
+          draft.windows == AppRollingWindowPresets.defaultValue
+        )
       }
+    }
+  }
+
+  private var receivesOTLPMetrics: Bool {
+    draft.mode == .metricsOnly
+      || (draft.mode == .standard && draft.otelMetrics)
+  }
+
+  private var advancedSection: some View {
+    Section {
+      DisclosureGroup(
+        isExpanded: $liveCLIExpanded
+      ) {
+        liveCLISettings
+          .padding(.top, 8)
+      } label: {
+        Label(
+          localized(
+            "settings.advanced.liveCLI",
+            fallback: "Live CLI Data"
+          ),
+          systemImage: "antenna.radiowaves.left.and.right"
+        )
+      }
+
+      DisclosureGroup(
+        isExpanded: $localModelsExpanded
+      ) {
+        localModelSettings
+          .padding(.top, 8)
+      } label: {
+        Label(
+          localized(
+            "settings.section.localModels",
+            fallback: "Local Model Servers"
+          ),
+          systemImage: "server.rack"
+        )
+      }
+
+      DisclosureGroup(
+        isExpanded: $collectionEngineExpanded
+      ) {
+        collectionEngineSettings
+          .padding(.top, 8)
+      } label: {
+        Label(
+          localized(
+            "settings.section.helper",
+            fallback: "Collection Engine"
+          ),
+          systemImage: "gearshape.2"
+        )
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var liveCLISettings: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      switch draft.mode {
+      case .standard:
+        Toggle(
+          localized(
+            "settings.otelMetrics",
+            fallback: "Listen for CLI telemetry"
+          ),
+          isOn: $draft.otelMetrics
+        )
+      case .metricsOnly:
+        Label(
+          localized(
+            "settings.otelMetrics.required",
+            fallback: "Enabled by Local metrics only mode"
+          ),
+          systemImage: "checkmark.circle.fill"
+        )
+        .foregroundStyle(.secondary)
+      case .demo:
+        Label(
+          localized(
+            "settings.otelMetrics.unavailable",
+            fallback: "Unavailable in Demo preview"
+          ),
+          systemImage: "minus.circle"
+        )
+        .foregroundStyle(.secondary)
+      }
+
+      Text(
+        localized(
+          "settings.otelMetrics.help",
+          fallback:
+            "Optional. Listens on this Mac at 127.0.0.1:4318. Each supported CLI must be launched with telemetry enabled."
+        )
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
 
       if receivesOTLPMetrics {
         Menu {
@@ -229,18 +479,8 @@ struct SettingsView: View {
     }
   }
 
-  private var receivesOTLPMetrics: Bool {
-    draft.mode == .metricsOnly
-      || (draft.mode == .standard && draft.otelMetrics)
-  }
-
-  private var localModelsSection: some View {
-    Section(
-      localized(
-        "settings.section.localModels",
-        fallback: "Local Model Servers"
-      )
-    ) {
+  private var localModelSettings: some View {
+    VStack(alignment: .leading, spacing: 8) {
       LabeledContent("llama.cpp") {
         TextField(
           "",
@@ -273,17 +513,12 @@ struct SettingsView: View {
     }
   }
 
-  private var helperSection: some View {
-    Section(
-      localized(
-        "settings.section.helper",
-        fallback: "Collection Engine (Advanced)"
-      )
-    ) {
+  private var collectionEngineSettings: some View {
+    VStack(alignment: .leading, spacing: 8) {
       LabeledContent(
         localized(
           "settings.cliPath",
-          fallback: "Tallyburn CLI path"
+          fallback: "Executable"
         )
       ) {
         HStack {
@@ -293,7 +528,7 @@ struct SettingsView: View {
             prompt: Text(
               localized(
                 "settings.cliPath.placeholder",
-                fallback: "Automatic"
+                fallback: "Automatic (Recommended)"
               )
             )
           )
@@ -315,7 +550,7 @@ struct SettingsView: View {
         localized(
           "settings.cliPath.help",
           fallback:
-            "Most people should leave this blank. The app automatically finds its bundled collection engine or a standard Tallyburn installation."
+            "Leave this blank unless you are testing another Tallyburn collection engine."
         )
       )
       .font(.caption)
@@ -333,7 +568,7 @@ struct SettingsView: View {
       Toggle(
         localized(
           "settings.showRate",
-          fallback: "Show average tokens per second in menu bar"
+          fallback: "Show token rate in menu bar"
         ),
         isOn: $draft.showRateInMenuBar
       )
@@ -374,6 +609,56 @@ struct SettingsView: View {
         isOn: $draft.launchAtLogin
       )
     }
+  }
+
+  private var selectedRollingWindows: Set<String> {
+    Set(draft.windows.split(separator: ",").map(String.init))
+  }
+
+  private func rollingWindowBinding(
+    _ label: String
+  ) -> Binding<Bool> {
+    Binding(
+      get: {
+        selectedRollingWindows.contains(label)
+      },
+      set: { selected in
+        var values = selectedRollingWindows
+        if selected {
+          guard
+            values.count
+              < AppRollingWindowPresets.maximumSelectionCount
+          else {
+            return
+          }
+          values.insert(label)
+        } else {
+          guard values.count > 1 else { return }
+          values.remove(label)
+        }
+        draft.windows =
+          AppRollingWindowPresets.labels
+          .filter(values.contains)
+          .joined(separator: ",")
+      }
+    )
+  }
+
+  private func rollingWindowOptionDisabled(
+    _ label: String
+  ) -> Bool {
+    let selected = selectedRollingWindows
+    return selected.contains(label)
+      ? selected.count == 1
+      : selected.count
+        >= AppRollingWindowPresets.maximumSelectionCount
+  }
+
+  private func rollingWindowTitle(_ label: String) -> String {
+    localized(
+      "settings.rollingWindow.\(label)",
+      fallback: label
+    )
   }
 
   private func settingsError(_ error: String) -> some View {
