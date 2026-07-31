@@ -27,6 +27,8 @@ test("the npm release verifier downloads and checks the registry tarball", async
   assert.match(script, /"snapshot"[\s\S]*"--demo"[\s\S]*"--json"/);
   assert.match(script, /"doctor", "--demo", "--json"/);
   assert.match(script, /process\.platform !== "win32"/);
+  assert.match(script, /resolveWindowsCommand\(command\)/);
+  assert.match(script, /path\.split\(";"\)/);
   assert.match(script, /"\/d", "\/s", "\/v:off", "\/c"/);
   assert.doesNotMatch(script, /shell:\s*true/);
 });

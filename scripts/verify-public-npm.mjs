@@ -2,8 +2,9 @@
 
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -211,7 +212,8 @@ function prepareLaunch(command, args) {
     return { command, args, env: process.env };
   }
 
-  const values = [command, ...args];
+  const resolvedCommand = resolveWindowsCommand(command);
+  const values = [resolvedCommand, ...args];
   for (const value of values) {
     if (/[\0\r\n"]/.test(value)) {
       throw new Error("A Windows command value contains unsupported characters.");
@@ -230,7 +232,7 @@ function prepareLaunch(command, args) {
       ([name]) => !reserved.has(name.toLowerCase()),
     ),
   );
-  env[targetVariable] = command;
+  env[targetVariable] = resolvedCommand;
   args.forEach((argument, index) => {
     env[`${argumentPrefix}${index}`] = argument;
   });
@@ -244,6 +246,24 @@ function prepareLaunch(command, args) {
     args: ["/d", "/s", "/v:off", "/c", commandLine],
     env,
   };
+}
+
+function resolveWindowsCommand(command) {
+  if (/[\\/]/.test(command)) {
+    return command;
+  }
+  const path = environmentValue(process.env, "PATH") ?? "";
+  for (const entry of path.split(";")) {
+    const directory = entry.trim().replace(/^"|"$/g, "");
+    if (!directory) {
+      continue;
+    }
+    const candidate = win32.join(directory, command);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`Unable to resolve the Windows command: ${command}`);
 }
 
 function environmentValue(env, key) {
