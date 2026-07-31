@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,8 +67,9 @@ await writeFile(tarballPath, tarball);
 
 const installRoot = join(outputDirectory, "install");
 await rm(installRoot, { recursive: true, force: true });
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-await run(npmCommand, [
+const npmLaunch = npmInvocation();
+await run(npmLaunch.command, [
+  ...npmLaunch.args,
   "install",
   "--prefix",
   installRoot,
@@ -85,7 +86,26 @@ const executable = join(
   ".bin",
   process.platform === "win32" ? "tallyburn.cmd" : "tallyburn",
 );
-const installedVersion = (await run(executable, ["--version"])).trim();
+await access(executable);
+const cliLaunch =
+  process.platform === "win32"
+    ? {
+        command: process.execPath,
+        args: [
+          join(
+            installRoot,
+            "node_modules",
+            packageJson.name,
+            "dist",
+            "src",
+            "cli.js",
+          ),
+        ],
+      }
+    : { command: executable, args: [] };
+const installedVersion = (
+  await run(cliLaunch.command, [...cliLaunch.args, "--version"])
+).trim();
 if (installedVersion !== version) {
   throw new Error(
     `The installed CLI reported ${installedVersion}; expected ${version}.`,
@@ -93,7 +113,8 @@ if (installedVersion !== version) {
 }
 
 const snapshot = JSON.parse(
-  await run(executable, [
+  await run(cliLaunch.command, [
+    ...cliLaunch.args,
     "snapshot",
     "--demo",
     "--json",
@@ -109,7 +130,12 @@ if (
 }
 
 const doctor = JSON.parse(
-  await run(executable, ["doctor", "--demo", "--json"]),
+  await run(cliLaunch.command, [
+    ...cliLaunch.args,
+    "doctor",
+    "--demo",
+    "--json",
+  ]),
 );
 if (
   doctor.schemaVersion !== 1 ||
@@ -172,10 +198,9 @@ function verifySubresourceIntegrity(contents, value) {
 
 function run(command, args) {
   return new Promise((resolveRun, rejectRun) => {
-    const launch = prepareLaunch(command, args);
-    const child = spawn(launch.command, launch.args, {
+    const child = spawn(command, args, {
       cwd: projectRoot,
-      env: launch.env,
+      env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -204,48 +229,16 @@ function run(command, args) {
   });
 }
 
-function prepareLaunch(command, args) {
-  if (
-    process.platform !== "win32" ||
-    !/\.(?:bat|cmd)$/i.test(command)
-  ) {
-    return { command, args, env: process.env };
+function npmInvocation() {
+  if (process.platform !== "win32") {
+    return { command: "npm", args: [] };
   }
-
-  const resolvedCommand = resolveWindowsCommand(command);
-  const values = [resolvedCommand, ...args];
-  for (const value of values) {
-    if (/[\0\r\n"]/.test(value)) {
-      throw new Error("A Windows command value contains unsupported characters.");
-    }
+  const npmCommand = resolveWindowsCommand("npm.cmd");
+  const npmCli = join(dirname(npmCommand), "node_modules", "npm", "bin", "npm-cli.js");
+  if (!existsSync(npmCli)) {
+    throw new Error(`Unable to locate the npm CLI module: ${npmCli}`);
   }
-
-  const targetVariable = "TALLYBURN_VERIFY_COMMAND";
-  const argumentPrefix = "TALLYBURN_VERIFY_ARGUMENT_";
-  const reserved = new Set(
-    [targetVariable, ...args.map((_, index) => `${argumentPrefix}${index}`)].map(
-      (name) => name.toLowerCase(),
-    ),
-  );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([name]) => !reserved.has(name.toLowerCase()),
-    ),
-  );
-  env[targetVariable] = resolvedCommand;
-  args.forEach((argument, index) => {
-    env[`${argumentPrefix}${index}`] = argument;
-  });
-  const references = args
-    .map((_, index) => ` "%${argumentPrefix}${index}%"`)
-    .join("");
-  const commandLine = `""%${targetVariable}%"${references}"`;
-
-  return {
-    command: environmentValue(process.env, "ComSpec") ?? "cmd.exe",
-    args: ["/d", "/s", "/v:off", "/c", commandLine],
-    env,
-  };
+  return { command: process.execPath, args: [npmCli] };
 }
 
 function resolveWindowsCommand(command) {
