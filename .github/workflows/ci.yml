@@ -116,9 +116,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build verified package
         run: pnpm cli:pack
-      - name: Reject unintended package content
+      - name: Verify package content
         run: |
-          if tar -tf build/npm/tallyburn-*.tgz | grep -Ei '(^|/)(README|docs|test)([./]|$)'; then
+          if ! tar -tf build/npm/tallyburn-*.tgz | grep -Eq '^package/README\.md$'; then
+            exit 1
+          fi
+          if tar -tf build/npm/tallyburn-*.tgz | grep -Ei '(^|/)(docs|test)([./]|$)'; then
             exit 1
           fi
       - name: Install and run packaged CLI

@@ -26,7 +26,7 @@ await cp(sourceRoot, join(stageRoot, "dist", "src"), {
   recursive: true,
 });
 await Promise.all(
-  ["LICENSE", "NOTICE"].map((name) =>
+  ["LICENSE", "NOTICE", "README.md"].map((name) =>
     cp(join(projectRoot, name), join(stageRoot, name)),
   ),
 );
@@ -71,6 +71,7 @@ async function verifyStage(root) {
   const required = [
     "LICENSE",
     "NOTICE",
+    "README.md",
     "package.json",
     join("dist", "src", "cli.js"),
     join("dist", "src", "index.js"),
@@ -84,8 +85,7 @@ async function verifyStage(root) {
   for (const file of relativeFiles) {
     if (
       file.startsWith("test") ||
-      file.startsWith("docs") ||
-      /^readme(?:\.|$)/i.test(file)
+      file.startsWith("docs")
     ) {
       throw new Error(`CLI package contains unintended documentation: ${file}`);
     }
