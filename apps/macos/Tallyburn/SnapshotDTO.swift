@@ -20,6 +20,7 @@ struct UsageSnapshotDTO: Decodable {
   let quotas: [String: QuotaSnapshotDTO]
   var accounts: [String: ProviderAccountStatusDTO]? = nil
   let sources: [String: SourceStatusDTO]
+  var diagnostics: DiagnosticsSnapshotDTO? = nil
 }
 
 struct LiveRateDTO: Decodable {
@@ -113,4 +114,38 @@ struct SourceStatusDTO: Decodable {
   let filesRead: Int
   let malformedLines: Int
   let lastEventAt: Double?
+}
+
+struct DiagnosticsSnapshotDTO: Decodable {
+  let generatedAt: Double
+  let engine: DiagnosticsEngineDTO
+  let providers: [String: ProviderDiagnosticDTO]
+}
+
+struct DiagnosticsEngineDTO: Decodable {
+  let state: String
+}
+
+struct ProviderDiagnosticDTO: Decodable {
+  let provider: String
+  let collection: String
+  let activity: ProviderActivityDiagnosticDTO
+  let quota: ProviderQuotaDiagnosticDTO
+}
+
+struct ProviderActivityDiagnosticDTO: Decodable {
+  let state: String
+  let reason: String
+  let lastEventAt: Double?
+  let filesSeen: Int
+  let filesRead: Int
+  let malformedLines: Int
+}
+
+struct ProviderQuotaDiagnosticDTO: Decodable {
+  let state: String
+  let observedAt: Double?
+  let ageMs: Double?
+  let hasPrimary: Bool
+  let hasSecondary: Bool
 }

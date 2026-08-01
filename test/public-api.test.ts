@@ -5,6 +5,7 @@ import {
   LIVE_ACTIVITY_HISTORY_WINDOW_MS,
   LIVE_ACTIVITY_RATE_WINDOW_MS,
   LIVE_ACTIVITY_SAMPLE_INTERVAL_MS,
+  buildDiagnostics,
   type ActivityRatePoint,
   type LiveTokenActivity,
   type TokenActivityAggregate,
@@ -61,4 +62,5 @@ test("package root exports the live activity contract", () => {
   assert.equal(activity.historyWindowMs, 60_000);
   assert.equal(activity.sampleIntervalMs, 1_000);
   assert.equal(activity.rateWindowMs, 60_000);
+  assert.equal(typeof buildDiagnostics, "function");
 });

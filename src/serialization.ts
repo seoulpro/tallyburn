@@ -1,6 +1,7 @@
 import { displayPath } from "./display.js";
 import type {
   BucketPoint,
+  DiagnosticsSnapshot,
   LiveTokenActivity,
   LiveTokenRate,
   Provider,
@@ -38,6 +39,7 @@ export interface PublicUsageSnapshot {
   quotas: Partial<Record<Provider, QuotaSnapshot>>;
   accounts?: Partial<Record<Provider, ProviderAccountStatus>>;
   sources: Record<Provider, PublicSourceStatus>;
+  diagnostics?: DiagnosticsSnapshot;
 }
 
 export interface SnapshotEnvelope {
@@ -109,6 +111,9 @@ export function snapshotForPublicIpc(
     sources: providerRecord((provider) =>
       publicSource(snapshot.sources[provider])
     ),
+    ...(snapshot.diagnostics
+      ? { diagnostics: snapshot.diagnostics }
+      : {}),
   };
 }
 

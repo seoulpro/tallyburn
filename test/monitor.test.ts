@@ -87,6 +87,7 @@ test("versioned stream envelope excludes event ids and source paths", async () =
   assert.equal(envelope.sequence, 7);
   assert.equal("recentEvents" in envelope.snapshot, false);
   assert.equal("root" in envelope.snapshot.sources.codex, false);
+  assert.equal(envelope.snapshot.diagnostics?.engine.state, "demo");
   assert.doesNotMatch(serialized, /demo:codex|demo:claude/);
   await monitor.close();
 });

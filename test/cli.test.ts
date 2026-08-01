@@ -183,9 +183,13 @@ test("doctor JSON is versioned and never revives expired Claude quota", async (c
     };
     claudeQuota: { available: boolean };
     collection: { otlp: { enabled: boolean; port?: number } };
-    paths: { config: string; state: string };
+    diagnostics: {
+      engine: { state: string };
+      providers: { claude?: { activity: { state: string } } };
+    };
+    sources: { claude: Record<string, unknown> };
   };
-  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.schemaVersion, 2);
   assert.equal(report.type, "doctor");
   assert.equal(report.healthy, true);
   assert.equal(report.clients.codex.available, true);
@@ -196,8 +200,15 @@ test("doctor JSON is versioned and never revives expired Claude quota", async (c
     logs: false,
     port: 4318,
   });
-  assert.doesNotMatch(report.paths.config, /[\u001b\n\r]/);
-  assert.doesNotMatch(report.paths.state, /[\u001b\n\r]/);
+  assert.equal(report.diagnostics.engine.state, "stopped");
+  assert.equal(
+    report.diagnostics.providers.claude?.activity.state,
+    "waiting",
+  );
+  assert.equal("location" in report.sources.claude, false);
+  assert.equal("paths" in report, false);
+  assert.equal("command" in report.clients.codex, false);
+  assert.doesNotMatch(JSON.stringify(report), new RegExp(root));
 });
 
 test(

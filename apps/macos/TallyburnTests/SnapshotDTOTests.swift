@@ -70,6 +70,29 @@ final class SnapshotDTOTests: XCTestCase {
               "filesRead": 0,
               "malformedLines": 0
             }
+          },
+          "diagnostics": {
+            "generatedAt": 1000,
+            "engine": { "state": "watch" },
+            "providers": {
+              "codex": {
+                "provider": "codex",
+                "collection": "transcript",
+                "activity": {
+                  "state": "active",
+                  "reason": "recentActivity",
+                  "lastEventAt": 900,
+                  "filesSeen": 1,
+                  "filesRead": 1,
+                  "malformedLines": 0
+                },
+                "quota": {
+                  "state": "waiting",
+                  "hasPrimary": false,
+                  "hasSecondary": false
+                }
+              }
+            }
           }
         }
       }
@@ -88,6 +111,12 @@ final class SnapshotDTOTests: XCTestCase {
     XCTAssertEqual(
       envelope.snapshot.accounts?["claude"]?.subscriptionType,
       "max"
+    )
+    XCTAssertEqual(envelope.snapshot.diagnostics?.engine.state, "watch")
+    XCTAssertEqual(
+      envelope.snapshot.diagnostics?.providers["codex"]?
+        .activity.reason,
+      "recentActivity"
     )
   }
 
@@ -221,6 +250,75 @@ final class SnapshotDTOTests: XCTestCase {
       activity.rateSeries?["all"]?.last?.tokensPerSecond,
       activity.all.tokensPerSecond
     )
+  }
+
+  func testSafeDiagnosticsReportExcludesPrivateFields() throws {
+    let json = """
+      {
+        "schemaVersion": 1,
+        "type": "snapshot",
+        "sequence": 1,
+        "snapshot": {
+          "generatedAt": 1000,
+          "windows": [],
+          "focusWindow": "1h",
+          "recentTokensPerMinute": 0,
+          "series": {},
+          "quotas": {},
+          "sources": {
+            "claude": {
+              "provider": "claude",
+              "available": true,
+              "filesSeen": 1,
+              "filesRead": 1,
+              "malformedLines": 0,
+              "root": "/Users/private/session",
+              "prompt": "private prompt"
+            }
+          },
+          "diagnostics": {
+            "generatedAt": 1000,
+            "engine": { "state": "poll" },
+            "providers": {
+              "claude": {
+                "provider": "claude",
+                "collection": "hybrid",
+                "activity": {
+                  "state": "idle",
+                  "reason": "noRecentActivity",
+                  "lastEventAt": 900,
+                  "filesSeen": 1,
+                  "filesRead": 1,
+                  "malformedLines": 0
+                },
+                "quota": {
+                  "state": "planDetected",
+                  "observedAt": 950,
+                  "ageMs": 50,
+                  "hasPrimary": false,
+                  "hasSecondary": false
+                }
+              }
+            }
+          }
+        }
+      }
+      """
+    let envelope = try JSONDecoder().decode(
+      SnapshotEnvelope.self,
+      from: Data(json.utf8)
+    )
+    let report = makeSafeDiagnosticsReport(
+      snapshot: envelope.snapshot,
+      sidecarState: .failed("/Users/private/engine")
+    )
+
+    XCTAssertTrue(report.contains("tallyburn-diagnostics"))
+    XCTAssertTrue(report.contains("planDetected"))
+    XCTAssertTrue(report.contains("\"connection\" : \"failed\""))
+    XCTAssertFalse(report.contains("/Users/private"))
+    XCTAssertFalse(report.contains("private prompt"))
+    XCTAssertFalse(report.contains("\"root\""))
   }
 }
 

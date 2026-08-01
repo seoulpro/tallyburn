@@ -13,6 +13,7 @@ import {
 import { startCodexAccountBridge, type CodexAccountBridge } from "./codex-account.js";
 import { buildDemo } from "./demo.js";
 import { parseWindows, type NamedDuration } from "./duration.js";
+import { buildDiagnostics } from "./diagnostics.js";
 import { UsageIndexer } from "./indexer.js";
 import {
   RECENT_RATE_WINDOW_MS,
@@ -213,6 +214,18 @@ export class TallyburnMonitor {
     if (Object.keys(this.#accounts).length > 0) {
       snapshot.accounts = structuredClone(this.#accounts);
     }
+    snapshot.diagnostics = buildDiagnostics(snapshot, {
+      providers: this.#options.providers,
+      running: this.#running,
+      collectionMode: this.collectionMode,
+      backfill: this.#options.backfill,
+      otelEnabled: this.#options.otelPort !== undefined,
+      codexAccount: this.#options.codexAccount,
+      claudeAccount: this.#options.claudeAccount,
+      llamaCppMetrics: this.#options.llamaCppMetrics !== undefined,
+      vllmMetrics: this.#options.vllmMetrics !== undefined,
+      demo: this.#options.demo,
+    });
     return snapshot;
   }
 

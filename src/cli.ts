@@ -54,10 +54,11 @@ async function main(): Promise<void> {
   const monitor = await TallyburnMonitor.create(monitorOptions(config));
   try {
     if (config.command === "doctor") {
+      const snapshot = monitor.snapshot();
       const result = await renderDoctor(
         config,
         monitor.sources,
-        monitor.snapshot().quotas.claude,
+        snapshot,
       );
       stdout.write(
         config.json

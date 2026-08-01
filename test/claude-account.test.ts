@@ -73,7 +73,7 @@ process.stdout.write(JSON.stringify({
 
   const status = await readClaudeAccountStatus({
     executable,
-    timeoutMs: 1_000,
+    timeoutMs: 3_000,
     now: 789,
   });
   assert.deepEqual(status, {

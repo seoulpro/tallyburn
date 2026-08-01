@@ -135,6 +135,70 @@ export interface SourceStatus {
   lastEventAt?: number;
 }
 
+export type CollectionEngineState = "stopped" | "watch" | "poll" | "demo";
+
+export type ProviderCollectionKind =
+  | "none"
+  | "transcript"
+  | "telemetry"
+  | "hybrid"
+  | "metrics"
+  | "demo";
+
+export type ProviderActivityState =
+  | "active"
+  | "idle"
+  | "waiting"
+  | "unavailable"
+  | "notConfigured";
+
+export type ProviderActivityReason =
+  | "recentActivity"
+  | "noRecentActivity"
+  | "awaitingFirstEvent"
+  | "sourceUnavailable"
+  | "collectionNotConfigured";
+
+export type QuotaDiagnosticState =
+  | "fresh"
+  | "planDetected"
+  | "waiting"
+  | "disabled"
+  | "signedOut"
+  | "unsupported";
+
+export interface ProviderActivityDiagnostic {
+  state: ProviderActivityState;
+  reason: ProviderActivityReason;
+  lastEventAt?: number;
+  filesSeen: number;
+  filesRead: number;
+  malformedLines: number;
+}
+
+export interface ProviderQuotaDiagnostic {
+  state: QuotaDiagnosticState;
+  observedAt?: number;
+  ageMs?: number;
+  hasPrimary: boolean;
+  hasSecondary: boolean;
+}
+
+export interface ProviderDiagnostic {
+  provider: Provider;
+  collection: ProviderCollectionKind;
+  activity: ProviderActivityDiagnostic;
+  quota: ProviderQuotaDiagnostic;
+}
+
+export interface DiagnosticsSnapshot {
+  generatedAt: number;
+  engine: {
+    state: CollectionEngineState;
+  };
+  providers: Partial<Record<Provider, ProviderDiagnostic>>;
+}
+
 export interface UsageSnapshot {
   generatedAt: number;
   windows: WindowAggregate[];
@@ -148,6 +212,7 @@ export interface UsageSnapshot {
   quotas: Partial<Record<Provider, QuotaSnapshot>>;
   accounts?: Partial<Record<Provider, ProviderAccountStatus>>;
   sources: Record<Provider, SourceStatus>;
+  diagnostics?: DiagnosticsSnapshot;
 }
 
 export const LIVE_RATE_WINDOW_MS = 60_000;

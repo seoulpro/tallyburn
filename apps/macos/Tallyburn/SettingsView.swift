@@ -40,7 +40,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     switch self {
     case .general: return 680
     case .colors: return 560
-    case .advanced: return 320
+    case .advanced: return 440
     }
   }
 }
@@ -83,6 +83,8 @@ struct SettingsView: View {
   @State private var liveCLIExpanded = false
   @State private var localModelsExpanded = false
   @State private var collectionEngineExpanded = false
+  @State private var diagnosticsExpanded = false
+  @State private var diagnosticsCopied = false
 
   private enum Layout {
     static let windowWidth: CGFloat = 520
@@ -112,6 +114,9 @@ struct SettingsView: View {
       initialValue: expandAdvancedSettings
     )
     _collectionEngineExpanded = State(
+      initialValue: expandAdvancedSettings
+    )
+    _diagnosticsExpanded = State(
       initialValue: expandAdvancedSettings
     )
   }
@@ -152,7 +157,7 @@ struct SettingsView: View {
       applyBar
     }
     .frame(width: Layout.windowWidth)
-    .frame(height: selectedPane.windowHeight)
+    .frame(height: settingsWindowHeight)
     .navigationTitle(
       localizedFormat(
         "settings.window.title",
@@ -163,6 +168,22 @@ struct SettingsView: View {
     .onChange(of: selectedPane) { _, pane in
       model.setSelectedSettingsPane(pane)
     }
+  }
+
+  private var settingsWindowHeight: CGFloat {
+    guard selectedPane == .advanced else {
+      return selectedPane.windowHeight
+    }
+    if diagnosticsExpanded {
+      return 620
+    }
+    if liveCLIExpanded || localModelsExpanded {
+      return 540
+    }
+    if collectionEngineExpanded {
+      return 480
+    }
+    return SettingsPane.advanced.windowHeight
   }
 
   private var generalPane: some View {
@@ -400,6 +421,372 @@ struct SettingsView: View {
           systemImage: "gearshape.2"
         )
       }
+
+      DisclosureGroup(
+        isExpanded: $diagnosticsExpanded
+      ) {
+        diagnosticsSettings
+          .padding(.top, 8)
+      } label: {
+        Label(
+          localized(
+            "settings.diagnostics",
+            fallback: "Diagnostics"
+          ),
+          systemImage: "stethoscope"
+        )
+      }
+    }
+  }
+
+  private var diagnosticsSettings: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      LabeledContent(
+        localized(
+          "settings.diagnostics.engine",
+          fallback: "Collection Engine"
+        )
+      ) {
+        Label(
+          diagnosticsEngineTitle,
+          systemImage: diagnosticsEngineSymbol
+        )
+        .foregroundStyle(diagnosticsEngineColor)
+      }
+
+      if let diagnostics = model.snapshot?.diagnostics,
+        !diagnostics.providers.isEmpty
+      {
+        Divider()
+
+        ForEach(
+          canonicalProviderOrder(Array(diagnostics.providers.keys)),
+          id: \.self
+        ) { provider in
+          if let diagnostic = diagnostics.providers[provider] {
+            providerDiagnosticRow(diagnostic)
+          }
+        }
+      } else {
+        Text(
+          localized(
+            "settings.diagnostics.waiting",
+            fallback:
+              "Waiting for the collection engine's first diagnostic snapshot."
+          )
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
+
+      Divider()
+
+      HStack(alignment: .firstTextBaseline) {
+        Text(
+          localized(
+            "settings.diagnostics.privacy",
+            fallback:
+              "The copied report excludes prompts, file paths, and account identifiers."
+          )
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+        Spacer()
+
+        Button {
+          copyDiagnosticsReport()
+        } label: {
+          Label(
+            diagnosticsCopied
+              ? localized(
+                "settings.diagnostics.copied",
+                fallback: "Copied"
+              )
+              : localized(
+                "settings.diagnostics.copy",
+                fallback: "Copy Report"
+              ),
+            systemImage: diagnosticsCopied
+              ? "checkmark"
+              : "doc.on.doc"
+          )
+        }
+      }
+    }
+  }
+
+  private func providerDiagnosticRow(
+    _ diagnostic: ProviderDiagnosticDTO
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Circle()
+          .fill(
+            providerTint(
+              diagnostic.provider,
+              overrides: model.providerColors
+            )
+          )
+          .frame(width: 8, height: 8)
+
+        Text(providerDisplayName(diagnostic.provider))
+          .fontWeight(.medium)
+
+        Spacer()
+
+        Label(
+          activityDiagnosticTitle(diagnostic.activity.state),
+          systemImage: activityDiagnosticSymbol(
+            diagnostic.activity.state
+          )
+        )
+        .foregroundStyle(
+          activityDiagnosticColor(diagnostic.activity.state)
+        )
+      }
+
+      Text(activityDiagnosticDetail(diagnostic.activity))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      if diagnostic.quota.state != "unsupported" {
+        Text(quotaDiagnosticTitle(diagnostic.quota))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      if diagnostic.activity.malformedLines > 0 {
+        Label(
+          localizedFormat(
+            "settings.diagnostics.malformed",
+            fallback: "%d malformed local records were skipped.",
+            diagnostic.activity.malformedLines
+          ),
+          systemImage: "exclamationmark.triangle"
+        )
+        .font(.caption)
+        .foregroundStyle(.orange)
+      }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var diagnosticsEngineTitle: String {
+    switch model.state {
+    case .idle:
+      return localized(
+        "settings.diagnostics.engine.idle",
+        fallback: "Not started"
+      )
+    case .starting:
+      return localized(
+        "settings.diagnostics.engine.starting",
+        fallback: "Starting…"
+      )
+    case .paused:
+      return localized(
+        "settings.diagnostics.engine.paused",
+        fallback: "Paused"
+      )
+    case .failed:
+      return localized(
+        "settings.diagnostics.engine.failed",
+        fallback: "Unavailable"
+      )
+    case .connected:
+      switch model.snapshot?.diagnostics?.engine.state {
+      case "watch":
+        return localized(
+          "settings.diagnostics.engine.watch",
+          fallback: "Watching for changes"
+        )
+      case "poll":
+        return localized(
+          "settings.diagnostics.engine.poll",
+          fallback: "Polling for changes"
+        )
+      case "demo":
+        return localized(
+          "settings.diagnostics.engine.demo",
+          fallback: "Demo data"
+        )
+      default:
+        return localized(
+          "settings.diagnostics.engine.connected",
+          fallback: "Connected"
+        )
+      }
+    }
+  }
+
+  private var diagnosticsEngineSymbol: String {
+    switch model.state {
+    case .connected: return "checkmark.circle.fill"
+    case .starting: return "clock"
+    case .failed: return "exclamationmark.triangle.fill"
+    case .paused: return "pause.circle.fill"
+    case .idle: return "circle"
+    }
+  }
+
+  private var diagnosticsEngineColor: Color {
+    switch model.state {
+    case .connected: return .green
+    case .failed: return .orange
+    default: return .secondary
+    }
+  }
+
+  private func activityDiagnosticTitle(_ state: String) -> String {
+    switch state {
+    case "active":
+      return localized(
+        "settings.diagnostics.activity.active",
+        fallback: "Active"
+      )
+    case "idle":
+      return localized(
+        "settings.diagnostics.activity.idle",
+        fallback: "Idle"
+      )
+    case "waiting":
+      return localized(
+        "settings.diagnostics.activity.waiting",
+        fallback: "Waiting"
+      )
+    case "unavailable":
+      return localized(
+        "settings.diagnostics.activity.unavailable",
+        fallback: "Source unavailable"
+      )
+    default:
+      return localized(
+        "settings.diagnostics.activity.notConfigured",
+        fallback: "Not configured"
+      )
+    }
+  }
+
+  private func activityDiagnosticSymbol(_ state: String) -> String {
+    switch state {
+    case "active": return "waveform"
+    case "idle": return "moon.zzz"
+    case "waiting": return "clock"
+    case "unavailable": return "exclamationmark.triangle"
+    default: return "minus.circle"
+    }
+  }
+
+  private func activityDiagnosticColor(_ state: String) -> Color {
+    switch state {
+    case "active": return .green
+    case "unavailable": return .orange
+    default: return .secondary
+    }
+  }
+
+  private func activityDiagnosticDetail(
+    _ activity: ProviderActivityDiagnosticDTO
+  ) -> String {
+    let detail: String
+    switch activity.reason {
+    case "recentActivity":
+      detail = localized(
+        "settings.diagnostics.reason.recentActivity",
+        fallback: "A completed response was observed in the last minute."
+      )
+    case "noRecentActivity":
+      detail = localized(
+        "settings.diagnostics.reason.noRecentActivity",
+        fallback:
+          "No completed response was reported in the last minute."
+      )
+    case "awaitingFirstEvent":
+      detail = localized(
+        "settings.diagnostics.reason.awaitingFirstEvent",
+        fallback: "Ready and waiting for the first token event."
+      )
+    case "sourceUnavailable":
+      detail = localized(
+        "settings.diagnostics.reason.sourceUnavailable",
+        fallback: "The supported local session source was not found."
+      )
+    default:
+      detail = localized(
+        "settings.diagnostics.reason.collectionNotConfigured",
+        fallback: "No token collection path is enabled for this provider."
+      )
+    }
+    guard let lastEventAt = activity.lastEventAt else { return detail }
+    return detail + " "
+      + localizedFormat(
+        "settings.diagnostics.lastEvent",
+        fallback: "Last event %@.",
+        relativeTime(lastEventAt)
+      )
+  }
+
+  private func quotaDiagnosticTitle(
+    _ quota: ProviderQuotaDiagnosticDTO
+  ) -> String {
+    let title: String
+    switch quota.state {
+    case "fresh":
+      title = localized(
+        "settings.diagnostics.quota.fresh",
+        fallback: "Usage limit is current"
+      )
+    case "planDetected":
+      title = localized(
+        "settings.diagnostics.quota.planDetected",
+        fallback: "Plan detected; current limit unavailable"
+      )
+    case "waiting":
+      title = localized(
+        "settings.diagnostics.quota.waiting",
+        fallback: "Waiting for a fresh provider limit"
+      )
+    case "disabled":
+      title = localized(
+        "settings.diagnostics.quota.disabled",
+        fallback: "Usage-limit reading is off"
+      )
+    case "signedOut":
+      title = localized(
+        "settings.diagnostics.quota.signedOut",
+        fallback: "Provider client is signed out"
+      )
+    default:
+      title = localized(
+        "settings.diagnostics.quota.unsupported",
+        fallback: "Usage limit is not supported"
+      )
+    }
+    guard let observedAt = quota.observedAt else { return title }
+    return title + " · " + relativeTime(observedAt)
+  }
+
+  private func relativeTime(_ milliseconds: Double) -> String {
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .abbreviated
+    return formatter.localizedString(
+      for: Date(timeIntervalSince1970: milliseconds / 1_000),
+      relativeTo: Date()
+    )
+  }
+
+  private func copyDiagnosticsReport() {
+    copyToPasteboard(
+      makeSafeDiagnosticsReport(
+        snapshot: model.snapshot,
+        sidecarState: model.state
+      )
+    )
+    diagnosticsCopied = true
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(2))
+      diagnosticsCopied = false
     }
   }
 
