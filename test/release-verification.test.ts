@@ -15,6 +15,16 @@ const workflow = resolve(
   process.cwd(),
   ".github/workflows/verify-release.yml",
 );
+const npmStager = resolve(process.cwd(), "scripts/stage-npm-package.mjs");
+
+test("the staged npm package explicitly includes its README", async () => {
+  const script = await readFile(npmStager, "utf8");
+
+  assert.match(script, /\["LICENSE", "NOTICE", "README\.md"\]/);
+  assert.match(script, /\[\.\.\.new Set\(\[\.\.\.\(source\.files \?\? \[\]\), "README\.md"\]\)\]/);
+  assert.match(script, /"README\.md",\n    "package\.json"/);
+  assert.match(script, /file\.startsWith\("docs"\)/);
+});
 
 test("the npm release verifier downloads and checks the registry tarball", async () => {
   const script = await readFile(npmVerifier, "utf8");

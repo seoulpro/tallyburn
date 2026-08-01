@@ -58,11 +58,13 @@ function publishManifest(source) {
     "bugs",
     "homepage",
   ];
-  return Object.fromEntries(
+  const manifest = Object.fromEntries(
     fields
       .filter((field) => source[field] !== undefined)
       .map((field) => [field, source[field]]),
   );
+  manifest.files = [...new Set([...(source.files ?? []), "README.md"])];
+  return manifest;
 }
 
 async function verifyStage(root) {
