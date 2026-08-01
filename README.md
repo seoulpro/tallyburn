@@ -9,8 +9,8 @@ It shows configurable rolling windows, a 60-second live activity graph, observed
 token rates, and provider-reported subscription quota — without sending prompts,
 running models, opening credential storage, or proxying provider traffic.
 
-> **Beta.** Version `0.1.0-beta.1`. Interfaces and the stream protocol may still
-> change between beta releases.
+> **Beta.** Interfaces and the stream protocol may still change between beta
+> releases.
 
 <p align="center">
   <img
