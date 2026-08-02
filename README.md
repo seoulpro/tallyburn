@@ -245,6 +245,15 @@ Build and run the macOS app from source with
 [`apps/macos/README.md`](https://github.com/seoulpro/tallyburn/blob/main/apps/macos/README.md). Contribution setup and checks
 are in [`CONTRIBUTING.md`](https://github.com/seoulpro/tallyburn/blob/main/CONTRIBUTING.md).
 
+## Related projects
+
+- [token-lease](https://github.com/seoulpro/token-lease) — reserving a token budget up
+  front, where Tallyburn reports usage after the fact.
+- [embertop](https://github.com/seoulpro/embertop) — the same local, terminal-first
+  approach applied to host CPU, memory, and traffic.
+- [process-leash](https://github.com/seoulpro/process-leash) — bounding what a workload
+  may consume rather than counting what it used.
+
 ## License and trademarks
 
 Code is licensed under the [Apache License 2.0](https://github.com/seoulpro/tallyburn/blob/main/LICENSE). Project marks are
