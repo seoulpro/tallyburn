@@ -1,6 +1,6 @@
 {
   "name": "tallyburn",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "description": "Local-first AI token usage monitor for Codex, Claude Code, Qwen Code, and local models",

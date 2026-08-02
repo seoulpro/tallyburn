@@ -162,7 +162,7 @@ After publishing both the GitHub release and npm version, verify the exact
 public downloads rather than the local build output:
 
 ```bash
-pnpm release:verify -- 0.1.0-beta.1
+pnpm release:verify -- 0.1.0-beta.3
 ```
 
 This downloads the release ZIP and npm tarball, validates registry integrity,

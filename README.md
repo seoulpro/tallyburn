@@ -25,8 +25,8 @@ running models, opening credential storage, or proxying provider traffic.
 
 ### macOS app
 
-Download `Tallyburn-0.1.0-beta.1-macos-universal.zip` from the
-[`v0.1.0-beta.1` release](https://github.com/seoulpro/tallyburn/releases/tag/v0.1.0-beta.1),
+Download `Tallyburn-0.1.0-beta.3-macos-universal.zip` from the
+[`v0.1.0-beta.3` release](https://github.com/seoulpro/tallyburn/releases/tag/v0.1.0-beta.3),
 unzip it, and move `Tallyburn.app` to `/Applications`. The build is universal
 (Apple silicon and Intel), signed with a Developer ID certificate, and notarized
 by Apple.
