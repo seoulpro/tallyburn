@@ -16,6 +16,7 @@ const workflow = resolve(
   ".github/workflows/verify-release.yml",
 );
 const npmStager = resolve(process.cwd(), "scripts/stage-npm-package.mjs");
+const doctorSource = resolve(process.cwd(), "src/doctor.ts");
 
 test("the staged npm package explicitly includes its README", async () => {
   const script = await readFile(npmStager, "utf8");
@@ -28,6 +29,7 @@ test("the staged npm package explicitly includes its README", async () => {
 
 test("the npm release verifier downloads and checks the registry tarball", async () => {
   const script = await readFile(npmVerifier, "utf8");
+  const doctorContract = await readFile(doctorSource, "utf8");
 
   assert.match(script, /https:\/\/registry\.npmjs\.org/);
   assert.match(script, /hostname !== "registry\.npmjs\.org"/);
@@ -43,6 +45,12 @@ test("the npm release verifier downloads and checks the registry tarball", async
   assert.match(script, /command: process\.execPath/);
   assert.match(script, /process\.platform === "win32" \? "tallyburn\.cmd"/);
   assert.doesNotMatch(script, /shell:\s*true/);
+  assert.equal(
+    script.match(/doctor\.schemaVersion !== (\d+)/)?.[1],
+    doctorContract.match(
+      /export interface DoctorReport \{\s+schemaVersion: (\d+);/,
+    )?.[1],
+  );
 });
 
 test("the macOS release verifier checks the downloaded public app", async () => {

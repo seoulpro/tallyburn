@@ -138,7 +138,7 @@ const doctor = JSON.parse(
   ]),
 );
 if (
-  doctor.schemaVersion !== 1 ||
+  doctor.schemaVersion !== 2 ||
   doctor.type !== "doctor" ||
   doctor.healthy !== true
 ) {
