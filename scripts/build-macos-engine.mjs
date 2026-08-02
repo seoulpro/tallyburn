@@ -100,7 +100,7 @@ await writeFile(
   seaConfig,
   `${JSON.stringify(
     {
-      main: bundle,
+      main: "tallyburn.cjs",
       output: seaBlob,
       disableExperimentalSEAWarning: true,
       useSnapshot: false,
@@ -122,7 +122,7 @@ if (!hostDistribution) {
 await run(hostDistribution.node, [
   "--experimental-sea-config",
   seaConfig,
-]);
+], { cwd: workRoot });
 
 const slices = [];
 for (const distribution of distributions) {
@@ -300,6 +300,7 @@ async function run(command, args, options = {}) {
   const result = await execFileAsync(command, args, {
     encoding: "utf8",
     maxBuffer: options.maxBuffer ?? 1024 * 1024,
+    cwd: options.cwd,
     env: process.env,
   });
   return result.stdout;

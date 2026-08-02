@@ -125,12 +125,30 @@ fi
     DEVELOPMENT_TEAM="$team_id" \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     ENABLE_HARDENED_RUNTIME=YES \
+    DEPLOYMENT_POSTPROCESSING=YES \
+    STRIP_INSTALLED_PRODUCT=YES \
+    COPY_PHASE_STRIP=YES \
+    STRIP_STYLE=all \
     OTHER_CODE_SIGN_FLAGS="--timestamp" \
     build
 )
 
 app_path="$derived_data/Build/Products/Release/Tallyburn.app"
 [[ -d "$app_path" ]] || fail "The Release app was not produced."
+
+app_executable="$app_path/Contents/MacOS/Tallyburn"
+helper_executable="$app_path/Contents/Helpers/tallyburn"
+build_user_home="${HOME:-}"
+for binary in "$app_executable" "$helper_executable"; do
+  [[ -f "$binary" ]] || fail "The Release app is missing $binary."
+  if LC_ALL=C /usr/bin/grep -a -F -q "$project_root" "$binary"; then
+    fail "The Release app contains the local project path."
+  fi
+  if [[ -n "$build_user_home" ]] &&
+    LC_ALL=C /usr/bin/grep -a -F -q "$build_user_home" "$binary"; then
+    fail "The Release app contains the local user home path."
+  fi
+done
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 entitlements_path="$release_root/Tallyburn.entitlements.plist"

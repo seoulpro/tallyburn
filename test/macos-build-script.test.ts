@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const buildScript = resolve(process.cwd(), "scripts/build-macos-dev.sh");
+const engineScript = resolve(process.cwd(), "scripts/build-macos-engine.mjs");
 const runScript = resolve(process.cwd(), "scripts/run-macos-dev.sh");
 
 test("the Debug macOS build embeds the standalone collection engine", async () => {
@@ -26,4 +27,12 @@ test("the Debug macOS launcher relies on the bundled collection engine", async (
   assert.match(script, /open -g "\$app_path"/);
   assert.doesNotMatch(script, /TALLYBURN_CLI_SCRIPT/);
   assert.doesNotMatch(script, /TALLYBURN_NODE_PATH/);
+});
+
+test("the standalone engine does not record its absolute bundle path", async () => {
+  const script = await readFile(engineScript, "utf8");
+
+  assert.match(script, /main: "tallyburn\.cjs"/);
+  assert.match(script, /\{ cwd: workRoot \}/);
+  assert.doesNotMatch(script, /main: bundle/);
 });
